@@ -1,0 +1,19 @@
+language: python
+
+sudo: false
+
+matrix:
+  include:
+    - python: 3.5.0
+      env: TOXENV=py35
+    - python: 3.4
+      env: TOXENV=py34
+
+install:
+  - pip install -U tox
+
+script:
+  - tox
+
+before_install:
+  - sleep 15 # wait for mongo
