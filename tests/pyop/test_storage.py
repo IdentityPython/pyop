@@ -7,11 +7,10 @@ from pyop.storage import MongoWrapper
 __author__ = 'lundberg'
 
 
-@pytest.mark.usefixtures('mongodb')
 class TestMongoStorage(object):
     @pytest.fixture()
-    def db(self, mongodb):
-        return MongoWrapper(mongodb.get_uri(), 'pyop', 'test')
+    def db(self, mongodb_instance):
+        return MongoWrapper(mongodb_instance.get_uri(), 'pyop', 'test')
 
     def test_write(self, db):
         db['foo'] = 'bar'

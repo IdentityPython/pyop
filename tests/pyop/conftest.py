@@ -78,7 +78,7 @@ class MongoTemporaryInstance(object):
 
 
 @pytest.yield_fixture
-def mongodb():
+def mongodb_instance():
     tmp_db = MongoTemporaryInstance()
     yield tmp_db
     tmp_db.shutdown()
