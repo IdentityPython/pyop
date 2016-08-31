@@ -242,14 +242,13 @@ class Provider(object):
         self.id_token_lifetime = id_token_lifetime
 
         self.authentication_request_validators = []  # type: List[Callable[[oic.oic.message.AuthorizationRequest], Boolean]]
-
         self.authentication_request_validators.append(_authorization_request_verify)
         self.authentication_request_validators.append(
-                functools.partial(_client_id_is_known, self))
+            functools.partial(_client_id_is_known, self))
         self.authentication_request_validators.append(
-                functools.partial(_redirect_uri_is_in_registered_redirect_uris, self))
+            functools.partial(_redirect_uri_is_in_registered_redirect_uris, self))
         self.authentication_request_validators.append(
-                functools.partial(_response_type_is_in_registered_response_types, self))
+            functools.partial(_response_type_is_in_registered_response_types, self))
         self.authentication_request_validators.append(_userinfo_claims_only_specified_when_access_token_is_issued)
         self.authentication_request_validators.append(functools.partial(_requested_scope_is_supported, self))
 
@@ -291,9 +290,9 @@ class Provider(object):
         logger.debug('parsed authentication_request: %s', auth_req)
         return auth_req
 
-    def authorize(self, authentication_request, # type: oic.oic.message.AuthorizationRequest
-                  user_id, # type: str
-                  extra_id_token_claims=None # type: Optional[Union[Mapping[str, Union[str, List[str]]], Callable[[str, str], Mapping[str, Union[str, List[str]]]]]
+    def authorize(self, authentication_request,  # type: oic.oic.message.AuthorizationRequest
+                  user_id,  # type: str
+                  extra_id_token_claims=None  # type: Optional[Union[Mapping[str, Union[str, List[str]]], Callable[[str, str], Mapping[str, Union[str, List[str]]]]]
                   ):
         # type: (...) -> oic.oic.message.AuthorizationResponse
         """
@@ -453,9 +452,9 @@ class Provider(object):
                 raise AuthorizationError('Requested subject identifier \'{}\' could not be matched'
                                          .format(requested_sub))
 
-    def handle_token_request(self, request_body, # type: str
-                             http_headers=None, # type: Optional[Mapping[str, str]]
-                             extra_id_token_claims=None # type: Optional[Union[Mapping[str, Union[str, List[str]]], Callable[[str, str], Mapping[str, Union[str, List[str]]]]]
+    def handle_token_request(self, request_body,  # type: str
+                             http_headers=None,  # type: Optional[Mapping[str, str]]
+                             extra_id_token_claims=None  # type: Optional[Union[Mapping[str, Union[str, List[str]]], Callable[[str, str], Mapping[str, Union[str, List[str]]]]]
                              ):
         # type: (...) -> oic.oic.message.AccessTokenResponse
         """
@@ -477,8 +476,8 @@ class Provider(object):
         raise InvalidTokenRequest('grant_type \'{}\' unknown'.format(token_request['grant_type']),
                                   oauth_error='unsupported_grant_type')
 
-    def _do_code_exchange(self, request, # type: Dict[str, str]
-                          extra_id_token_claims=None # type: Optional[Union[Mapping[str, Union[str, List[str]]], Callable[[str, str], Mapping[str, Union[str, List[str]]]]]
+    def _do_code_exchange(self, request,  # type: Dict[str, str]
+                          extra_id_token_claims=None  # type: Optional[Union[Mapping[str, Union[str, List[str]]], Callable[[str, str], Mapping[str, Union[str, List[str]]]]]
                           ):
         # type: (...) -> oic.message.AccessTokenResponse
         """
@@ -588,7 +587,7 @@ class Provider(object):
 
         response = OpenIDSchema(sub=introspection['sub'], **user_claims)
         logger.debug('userinfo=%s from requested_claims=%s userinfo=%s extra_claims=%s',
-                     OpenIDSchema(**user_claims), requested_claims, user_claims)
+                     response, requested_claims, user_claims)
         return response
 
     def _issue_new_client(self):
