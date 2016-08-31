@@ -172,7 +172,7 @@ class Provider(object):
         self.signing_key = signing_key
         self.configuration_information = configuration_information
         if 'subject_types_supported' not in configuration_information:
-            self.configuration_information['subject_types_supported'] = ['pairwise', 'public']
+            self.configuration_information['subject_types_supported'] = ['pairwise']
         if 'id_token_signing_alg_values_supported' not in configuration_information:
             self.configuration_information['id_token_signing_alg_values_supported'] = ['RS256']
         if 'scopes_supported' not in configuration_information:
