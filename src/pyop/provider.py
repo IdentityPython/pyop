@@ -8,7 +8,6 @@ from urllib.parse import urlparse
 
 from jwkest import jws
 from oic import rndstr
-from oic.oauth2.message import ErrorResponse
 from oic.oauth2.message import MissingRequiredAttribute
 from oic.oauth2.message import MissingRequiredValue
 from oic.oic import PREFERENCE2PROVIDER
@@ -26,51 +25,13 @@ from oic.oic.message import RegistrationResponse
 
 from .access_token import extract_bearer_token_from_http_request
 from .client_authentication import verify_client_authentication
+from .exceptions import AuthorizationError
+from .exceptions import InvalidAuthenticationRequest
+from .exceptions import InvalidClientRegistrationRequest
+from .exceptions import InvalidTokenRequest
+from .exceptions import InvalidUserinfoRequest
 
 logger = logging.getLogger(__name__)
-
-
-class InvalidAuthenticationRequest(ValueError):
-    def __init__(self, message, parsed_request, oauth_error=None):
-        super().__init__(message)
-        self.request = parsed_request
-        self.oauth_error = oauth_error
-
-    def to_error_url(self):
-        redirect_uri = self.request.get('redirect_uri')
-        if redirect_uri and self.oauth_error:
-            error_resp = ErrorResponse(error=self.oauth_error, error_message=str(self))
-            return error_resp.request(redirect_uri, should_fragment_encode(self.request))
-
-        return None
-
-
-class AuthorizationError(Exception):
-    pass
-
-
-class InvalidTokenRequest(ValueError):
-    def __init__(self, message, oauth_error='invalid_request'):
-        super().__init__(message)
-        self.oauth_error = oauth_error
-
-
-class InvalidUserinfoRequest(ValueError):
-    pass
-
-
-class InvalidClientRegistrationRequest(ValueError):
-    def __init__(self, message, oauth_error='invalid_request'):
-        super().__init__(message)
-        self.oauth_error = oauth_error
-
-
-def should_fragment_encode(authentication_request):
-    if authentication_request['response_type'] == ['code']:
-        # Authorization Code Flow -> query encode
-        return False
-
-    return True
 
 
 def _authorization_request_verify(authentication_request):
@@ -292,7 +253,8 @@ class Provider(object):
 
     def authorize(self, authentication_request,  # type: oic.oic.message.AuthorizationRequest
                   user_id,  # type: str
-                  extra_id_token_claims=None  # type: Optional[Union[Mapping[str, Union[str, List[str]]], Callable[[str, str], Mapping[str, Union[str, List[str]]]]]
+                  extra_id_token_claims=None
+                  # type: Optional[Union[Mapping[str, Union[str, List[str]]], Callable[[str, str], Mapping[str, Union[str, List[str]]]]]
                   ):
         # type: (...) -> oic.oic.message.AuthorizationResponse
         """
@@ -454,7 +416,8 @@ class Provider(object):
 
     def handle_token_request(self, request_body,  # type: str
                              http_headers=None,  # type: Optional[Mapping[str, str]]
-                             extra_id_token_claims=None  # type: Optional[Union[Mapping[str, Union[str, List[str]]], Callable[[str, str], Mapping[str, Union[str, List[str]]]]]
+                             extra_id_token_claims=None
+                             # type: Optional[Union[Mapping[str, Union[str, List[str]]], Callable[[str, str], Mapping[str, Union[str, List[str]]]]]
                              ):
         # type: (...) -> oic.oic.message.AccessTokenResponse
         """
@@ -477,7 +440,8 @@ class Provider(object):
                                   oauth_error='unsupported_grant_type')
 
     def _do_code_exchange(self, request,  # type: Dict[str, str]
-                          extra_id_token_claims=None  # type: Optional[Union[Mapping[str, Union[str, List[str]]], Callable[[str, str], Mapping[str, Union[str, List[str]]]]]
+                          extra_id_token_claims=None
+                          # type: Optional[Union[Mapping[str, Union[str, List[str]]], Callable[[str, str], Mapping[str, Union[str, List[str]]]]]
                           ):
         # type: (...) -> oic.message.AccessTokenResponse
         """

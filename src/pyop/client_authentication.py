@@ -1,11 +1,9 @@
 import base64
 import logging
 
+from .exceptions import InvalidClientAuthentication
+
 logger = logging.getLogger(__name__)
-
-
-class InvalidClientAuthentication(ValueError):
-    pass
 
 
 def verify_client_authentication(parsed_request, clients, authz_header=None):
@@ -36,8 +34,7 @@ def verify_client_authentication(parsed_request, clients, authz_header=None):
             auth = base64.urlsafe_b64decode(credentials.encode('utf-8')).decode('utf-8')
             client_id, client_secret = auth.split(':')
         else:
-            raise InvalidClientAuthentication(
-                'Unknown scheme in authorization header, {} != Basic'.format(authz_scheme))
+            raise InvalidClientAuthentication('Unknown scheme in authorization header, {} != Basic'.format(authz_scheme))
     elif 'client_id' in parsed_request:
         logger.debug('client authentication in request body %s', parsed_request)
 

@@ -8,10 +8,7 @@ from oic.oic.message import AuthorizationRequest
 
 from pyop.authz_state import AccessToken, InvalidScope
 from pyop.authz_state import AuthorizationState
-from pyop.authz_state import InvalidAccessToken
-from pyop.authz_state import InvalidAuthorizationCode
-from pyop.authz_state import InvalidRefreshToken
-from pyop.authz_state import InvalidSubjectIdentifier
+from pyop.exceptions import InvalidSubjectIdentifier, InvalidAccessToken, InvalidAuthorizationCode, InvalidRefreshToken
 from pyop.subject_identifier import HashBasedSubjectIdentifierFactory
 
 MOCK_TIME = Mock(return_value=time.mktime(dt.datetime(2016, 6, 21).timetuple()))

@@ -6,28 +6,13 @@ from oic.extension.message import TokenIntrospectionResponse
 from oic.oic.message import AuthorizationRequest
 
 from .access_token import AccessToken
+from .exceptions import InvalidAccessToken
+from .exceptions import InvalidAuthorizationCode
+from .exceptions import InvalidRefreshToken
+from .exceptions import InvalidScope
+from .exceptions import InvalidSubjectIdentifier
 
 logger = logging.getLogger(__name__)
-
-
-class InvalidAuthorizationCode(ValueError):
-    pass
-
-
-class InvalidAccessToken(ValueError):
-    pass
-
-
-class InvalidRefreshToken(ValueError):
-    pass
-
-
-class InvalidSubjectIdentifier(ValueError):
-    pass
-
-
-class InvalidScope(ValueError):
-    pass
 
 
 def rand_str():
@@ -153,7 +138,7 @@ class AuthorizationState(object):
         self.access_tokens[access_token.value] = authz_info
 
         logger.debug('new access_token=%s to client_id=%s for sub=%s valid_until=%s',
-                    access_token.value, auth_req['client_id'], subject_identifier, authz_info['exp'])
+                     access_token.value, auth_req['client_id'], subject_identifier, authz_info['exp'])
         return access_token
 
     def exchange_code_for_token(self, authorization_code):
@@ -254,7 +239,7 @@ class AuthorizationState(object):
             self.refresh_tokens[refresh_token]['access_token'] = new_access_token.value
 
         logger.debug('refreshed tokens, new_access_token=%s new_refresh_token=%s old_refresh_token=%s',
-                    new_access_token, new_refresh_token, refresh_token)
+                     new_access_token, new_refresh_token, refresh_token)
         return new_access_token, new_refresh_token
 
     def get_subject_identifier(self, subject_type, user_id, sector_identifier=None):
@@ -326,7 +311,7 @@ class AuthorizationState(object):
             raise InvalidAuthorizationCode('{} unknown'.format(authorization_code))
 
         return AuthorizationRequest().from_dict(
-                self.authorization_codes[authorization_code][self.KEY_AUTHORIZATION_REQUEST])
+            self.authorization_codes[authorization_code][self.KEY_AUTHORIZATION_REQUEST])
 
     def get_authorization_request_for_access_token(self, access_token_value):
         # type: (str) -> oic.oic.message.AuthorizationRequest

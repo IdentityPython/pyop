@@ -1,6 +1,8 @@
 import logging
 from urllib.parse import parse_qsl
 
+from .exceptions import BearerTokenError
+
 logger = logging.getLogger(__name__)
 
 
@@ -14,10 +16,6 @@ class AccessToken(object):
         self.value = value
         self.expires_in = expires_in
         self.type = typ
-
-
-class BearerTokenError(ValueError):
-    pass
 
 
 def extract_bearer_token_from_http_request(request=None, http_headers=None):
