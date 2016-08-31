@@ -1,3 +1,5 @@
+import json
+
 from oic.oauth2.message import ErrorResponse
 
 from .util import should_fragment_encode
@@ -64,3 +66,7 @@ class InvalidClientRegistrationRequest(ValueError):
     def __init__(self, message, oauth_error='invalid_request'):
         super().__init__(message)
         self.oauth_error = oauth_error
+
+    def to_json(self):
+        error = {'error': self.oauth_error, 'error_description': str(self)}
+        return json.dumps(error)
