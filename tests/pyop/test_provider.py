@@ -1,5 +1,7 @@
 import datetime as dt
+import json
 import time
+from collections import Counter
 from unittest.mock import Mock, patch
 from urllib.parse import urlencode
 
@@ -9,14 +11,15 @@ from jwkest import jws
 from jwkest.jwk import RSAKey
 from oic import rndstr
 from oic.oauth2.message import MissingRequiredValue, MissingRequiredAttribute
+from oic.oic import PREFERENCE2PROVIDER
 from oic.oic.message import IdToken, AuthorizationRequest, ClaimsRequest, Claims
 
-from pyop.authz_state import AuthorizationState, InvalidAccessToken
 from pyop.access_token import BearerTokenError
+from pyop.authz_state import AuthorizationState
 from pyop.client_authentication import InvalidClientAuthentication
 from pyop.provider import Provider, InvalidAuthenticationRequest, AuthorizationError, InvalidTokenRequest, \
     InvalidUserinfoRequest, should_fragment_encode, _redirect_uri_is_in_registered_redirect_uris, \
-    _response_type_is_in_registered_response_types
+    _response_type_is_in_registered_response_types, InvalidClientRegistrationRequest
 from pyop.subject_identifier import HashBasedSubjectIdentifierFactory
 from pyop.userinfo import Userinfo
 
@@ -396,16 +399,127 @@ class TestProviderHandleUserinfoRequest(object):
             self.provider.handle_userinfo_request(urlencode({'access_token': access_token}))
 
 
+@pytest.mark.usefixtures('inject_provider')
+class TestProviderHandleRegistrationRequest(object):
+    def test_handle_registration_request(self):
+        request = {'redirect_uris': ['https://client.example.com/redirect']}
+        response = self.provider.handle_client_registration_request(json.dumps(request))
+        assert 'client_id' in response
+        assert 'client_id_issued_at' in response
+        assert 'client_secret' in response
+        assert response['client_secret_expires_at'] == 0
+        assert all(k in response.items() for k in request.items())
+
+        assert response['client_id'] in self.provider.clients
+
+    def test_rejects_invalid_request(self):
+        request = {'application_type': 'web', 'client_name': 'test client'}  # missing 'redirect_uris'
+        with pytest.raises(InvalidClientRegistrationRequest):
+            self.provider.handle_client_registration_request(json.dumps(request))
+
+    @pytest.mark.parametrize('client_preference, provider_capability, client_value, provider_value', [
+        ('request_object_signing_alg', 'request_object_signing_alg_values_supported',
+         'HS256', ['none', 'RS256']),
+        ('request_object_encryption_alg', 'request_object_encryption_alg_values_supported',
+         'RSA-OAEP-256', ['RSA-OAEP', 'ECDH-ES']),
+        ('request_object_encryption_enc', 'request_object_encryption_enc_values_supported',
+         'A192CBC-HS384', ['A128CBC-HS256', 'A256CBC-HS512 ']),
+        ('userinfo_signed_response_alg', 'userinfo_signing_alg_values_supported',
+         'HS256', ['none', 'RS256']),
+        ('userinfo_encrypted_response_alg', 'userinfo_encryption_alg_values_supported',
+         'RSA-OAEP-256', ['RSA-OAEP', 'ECDH-ES']),
+        ('userinfo_encrypted_response_enc', 'userinfo_encryption_enc_values_supported',
+         'A192CBC-HS384', ['A128CBC-HS256', 'A256CBC-HS512 ']),
+        ('id_token_signed_response_alg', 'id_token_signing_alg_values_supported',
+         'HS256', ['none', 'RS256']),
+        ('id_token_encrypted_response_alg', 'id_token_encryption_alg_values_supported',
+         'RSA-OAEP-256', ['RSA-OAEP', 'ECDH-ES']),
+        ('id_token_encrypted_response_enc', 'id_token_encryption_enc_values_supported',
+         'A192CBC-HS384', ['A128CBC-HS256', 'A256CBC-HS512 ']),
+        ('default_acr_values', 'acr_values_supported',
+         ['1', '2'], ['3', '4']),
+        ('subject_type', 'subject_types_supported',
+         'public', ['pairwise']),
+        ('token_endpoint_auth_method', 'token_endpoint_auth_methods_supported',
+         'private_key_jwt', ['client_secret_post', 'client_secret_basic']),
+        ('token_endpoint_auth_signing_alg', 'token_endpoint_auth_signing_alg_values_supported',
+         'HS256', ['none', 'RS256']),
+        ('response_types', 'response_types_supported',
+         ['id_token token'], ['code', 'code token']),
+        ('grant_types', 'grant_types_supported',
+         'implicit', ['authorization_code'])
+    ])
+    def test_rejects_mismatching_request(self, client_preference, provider_capability, client_value, provider_value):
+        request = {'redirect_uris': ['https://client.example.com/redirect']}
+        provider_capabilities = {'issuer': ISSUER}
+
+        if client_preference.startswith(('request_object_encryption', 'id_token_encrypted', 'userinfo_encrypted')):
+            # provide default value for the metadata params that come in pairs
+            param = client_preference[:-4]
+            alg_param = param + '_alg'
+            request[alg_param] = 'RSA-OAEP'
+            provider_capabilities[PREFERENCE2PROVIDER[alg_param]] = ['RSA-OAEP']
+            enc_param = param + '_enc'
+            request[enc_param] = 'A192CBC-HS256'
+            provider_capabilities[PREFERENCE2PROVIDER[enc_param]] = ['A192CBC-HS256']
+
+        request[client_preference] = client_value
+        provider_capabilities[provider_capability] = provider_value
+        provider = Provider(rsa_key(), provider_capabilities,
+                            AuthorizationState(HashBasedSubjectIdentifierFactory('salt')), {}, None)
+        with pytest.raises(InvalidClientRegistrationRequest):
+            provider.handle_client_registration_request(json.dumps(request))
+
+    @pytest.mark.parametrize('client_preference, provider_capability, client_value, provider_value', [
+        ('response_types', 'response_types_supported',
+         ['code id_token token', 'code', 'id_token', 'id_token token'],
+         ['code id_token token', 'id_token token']),
+        ('default_acr_values', 'acr_values_supported',
+         ['1', '2', '3'], ['2', '3', '4']),
+    ])
+    def test_matches_common_set_of_metadata_values(self, client_preference, provider_capability,
+                                                   client_value, provider_value):
+        provider_capabilities = {'issuer': ISSUER, provider_capability: provider_value}
+        provider = Provider(rsa_key(), provider_capabilities,
+                            AuthorizationState(HashBasedSubjectIdentifierFactory('salt')), {}, None)
+        request = {'redirect_uris': ['https://client.example.com/redirect'], client_preference: client_value}
+        response = provider.handle_client_registration_request(json.dumps(request))
+        expected_values = set(client_value).intersection(provider_value)
+        assert Counter(frozenset(v.split()) for v in response[client_preference]) ==\
+               Counter(frozenset(v.split()) for v in expected_values)
+
+    def test_match_space_separated_response_type_without_order(self):
+        registration_request = {'redirect_uris': ['https://client.example.com/redirect'],
+                                'response_types': ['id_token token']}
+        # should not raise an exception
+        assert self.provider.handle_client_registration_request(json.dumps(registration_request))
+
+    def test_client_can_use_registered_space_separated_response_type_in_authentication_request(self):
+        response_type = 'id_token token'
+        registration_request = {'redirect_uris': ['https://client.example.com/redirect'],
+                                'response_types': [response_type]}
+        registration_response = self.provider.handle_client_registration_request(json.dumps(registration_request))
+
+        authentication_request = {'client_id': registration_response['client_id'],
+                                  'redirect_uri': 'https://client.example.com/redirect',
+                                  'scope': 'openid',
+                                  'nonce': 'nonce',
+                                  'response_type': response_type}
+        # should not raise an exception
+        assert self.provider.parse_authentication_request(urlencode(authentication_request))
+
+
 class TestProviderProviderConfiguration(object):
     def test_provider_configuration(self):
-        config = {'foo': 'bar', 'abc': 'xyz'}
+        config = {'issuer': ISSUER, 'foo': 'bar', 'abc': 'xyz'}
         provider = Provider(None, config, None, None, None)
-        assert provider.provider_configuration == config
+        provider_config = provider.provider_configuration
+        assert all(k in provider_config for k in config)
 
 
 class TestProviderJWKS(object):
     def test_jwks(self):
-        provider = Provider(rsa_key(), {}, None, None, None)
+        provider = Provider(rsa_key(), {'issuer': ISSUER}, None, None, None)
         assert provider.jwks == {'keys': [provider.signing_key.serialize()]}
 
 

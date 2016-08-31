@@ -2,13 +2,16 @@ import copy
 import functools
 import logging
 import time
+import uuid
 from urllib.parse import parse_qsl
 from urllib.parse import urlparse
 
 from jwkest import jws
-from oic.oauth2.message import MissingRequiredAttribute
+from oic import rndstr
 from oic.oauth2.message import ErrorResponse
+from oic.oauth2.message import MissingRequiredAttribute
 from oic.oauth2.message import MissingRequiredValue
+from oic.oic import PREFERENCE2PROVIDER
 from oic.oic import scope2claims
 from oic.oic.message import AccessTokenRequest
 from oic.oic.message import AccessTokenResponse
@@ -16,9 +19,12 @@ from oic.oic.message import AuthorizationRequest
 from oic.oic.message import AuthorizationResponse
 from oic.oic.message import IdToken
 from oic.oic.message import OpenIDSchema
+from oic.oic.message import ProviderConfigurationResponse
 from oic.oic.message import RefreshAccessTokenRequest
+from oic.oic.message import RegistrationRequest
+from oic.oic.message import RegistrationResponse
 
-from .access_token import extract_bearer_token_from_http_request, BearerTokenError
+from .access_token import extract_bearer_token_from_http_request
 from .client_authentication import verify_client_authentication
 
 logger = logging.getLogger(__name__)
@@ -51,6 +57,12 @@ class InvalidTokenRequest(ValueError):
 
 class InvalidUserinfoRequest(ValueError):
     pass
+
+
+class InvalidClientRegistrationRequest(ValueError):
+    def __init__(self, message, oauth_error='invalid_request'):
+        super().__init__(message)
+        self.oauth_error = oauth_error
 
 
 def should_fragment_encode(authentication_request):
@@ -154,6 +166,49 @@ def _requested_scope_is_supported(provider, authentication_request):
                                            authentication_request, oauth_error='invalid_scope')
 
 
+def _registration_request_verify(registration_request):
+    """
+    Verifies that all required parameters and correct values are included in the client registration request.
+    :param registration_request: the authentication request to verify
+    :raise InvalidClientRegistrationRequest: if the registration is incorrect
+    """
+    try:
+        registration_request.verify()
+    except (MissingRequiredValue, MissingRequiredAttribute) as e:
+        raise InvalidClientRegistrationRequest(str(e), oauth_error='invalid_request') from e
+
+
+def _client_preferences_match_provider_capabilities(provider, registration_request):
+    """
+    Verifies that all requested preferences in the client metadata can be fulfilled by this provider.
+    :param registration_request: the authentication request to verify
+    :raise InvalidClientRegistrationRequest: if the registration is incorrect
+    """
+
+    def match(client_preference, provider_capability):
+        if isinstance(client_preference, list):
+            # deal with comparing space separated values, e.g. 'response_types', without considering the order
+            client_values = [set(c.split()) for c in client_preference]
+            provider_values = [set(p.split()) for p in provider_capability]
+
+            # at least one requested preference must be matched
+            return any(v in provider_values for v in client_values)
+        return client_preference in provider_capability
+
+    for client_preference in registration_request.keys():
+        if client_preference not in PREFERENCE2PROVIDER:
+            # metadata parameter that shouldn't be matched
+            continue
+
+        provider_capability = PREFERENCE2PROVIDER[client_preference]
+        if not match(registration_request[client_preference], provider.configuration_information[provider_capability]):
+            raise InvalidClientRegistrationRequest(
+                'Could not match client preference {}={} with provider capability {}={}'.format(
+                    client_preference, registration_request[client_preference], provider_capability,
+                    provider.configuration_information[provider_capability]),
+                oauth_error='invalid_request')
+
+
 class Provider(object):
     def __init__(self, signing_key, configuration_information, authz_state, clients, userinfo, *,
                  id_token_lifetime=3600):
@@ -170,13 +225,16 @@ class Provider(object):
         :param id_token_lifetime: how long the signed ID Tokens should be valid (in seconds), defaults to 1 hour
         """
         self.signing_key = signing_key
-        self.configuration_information = configuration_information
+        self.configuration_information = ProviderConfigurationResponse(**configuration_information)
         if 'subject_types_supported' not in configuration_information:
-            self.configuration_information['subject_types_supported'] = ['pairwise', 'public']
+            self.configuration_information['subject_types_supported'] = ['pairwise']
         if 'id_token_signing_alg_values_supported' not in configuration_information:
             self.configuration_information['id_token_signing_alg_values_supported'] = ['RS256']
         if 'scopes_supported' not in configuration_information:
             self.configuration_information['scopes_supported'] = ['openid']
+        if 'response_types_supported' not in configuration_information:
+            self.configuration_information['response_types_supported'] = ['code', 'id_token', 'token id_token']
+        self.configuration_information.verify()
 
         self.authz_state = authz_state
         self.clients = clients
@@ -184,16 +242,20 @@ class Provider(object):
         self.id_token_lifetime = id_token_lifetime
 
         self.authentication_request_validators = []  # type: List[Callable[[oic.oic.message.AuthorizationRequest], Boolean]]
-
         self.authentication_request_validators.append(_authorization_request_verify)
         self.authentication_request_validators.append(
-                functools.partial(_client_id_is_known, self))
+            functools.partial(_client_id_is_known, self))
         self.authentication_request_validators.append(
-                functools.partial(_redirect_uri_is_in_registered_redirect_uris, self))
+            functools.partial(_redirect_uri_is_in_registered_redirect_uris, self))
         self.authentication_request_validators.append(
-                functools.partial(_response_type_is_in_registered_response_types, self))
+            functools.partial(_response_type_is_in_registered_response_types, self))
         self.authentication_request_validators.append(_userinfo_claims_only_specified_when_access_token_is_issued)
         self.authentication_request_validators.append(functools.partial(_requested_scope_is_supported, self))
+
+        self.registration_request_validators = []  # type: List[Callable[[oic.oic.message.RegistrationRequest], Boolean]]
+        self.registration_request_validators.append(_registration_request_verify)
+        self.registration_request_validators.append(
+            functools.partial(_client_preferences_match_provider_capabilities, self))
 
     @property
     def provider_configuration(self):
@@ -228,9 +290,9 @@ class Provider(object):
         logger.debug('parsed authentication_request: %s', auth_req)
         return auth_req
 
-    def authorize(self, authentication_request, # type: oic.oic.message.AuthorizationRequest
-                  user_id, # type: str
-                  extra_id_token_claims=None # type: Optional[Union[Mapping[str, Union[str, List[str]]], Callable[[str, str], Mapping[str, Union[str, List[str]]]]]
+    def authorize(self, authentication_request,  # type: oic.oic.message.AuthorizationRequest
+                  user_id,  # type: str
+                  extra_id_token_claims=None  # type: Optional[Union[Mapping[str, Union[str, List[str]]], Callable[[str, str], Mapping[str, Union[str, List[str]]]]]
                   ):
         # type: (...) -> oic.oic.message.AuthorizationResponse
         """
@@ -390,9 +452,9 @@ class Provider(object):
                 raise AuthorizationError('Requested subject identifier \'{}\' could not be matched'
                                          .format(requested_sub))
 
-    def handle_token_request(self, request_body, # type: str
-                             http_headers=None, # type: Optional[Mapping[str, str]]
-                             extra_id_token_claims=None # type: Optional[Union[Mapping[str, Union[str, List[str]]], Callable[[str, str], Mapping[str, Union[str, List[str]]]]]
+    def handle_token_request(self, request_body,  # type: str
+                             http_headers=None,  # type: Optional[Mapping[str, str]]
+                             extra_id_token_claims=None  # type: Optional[Union[Mapping[str, Union[str, List[str]]], Callable[[str, str], Mapping[str, Union[str, List[str]]]]]
                              ):
         # type: (...) -> oic.oic.message.AccessTokenResponse
         """
@@ -414,8 +476,8 @@ class Provider(object):
         raise InvalidTokenRequest('grant_type \'{}\' unknown'.format(token_request['grant_type']),
                                   oauth_error='unsupported_grant_type')
 
-    def _do_code_exchange(self, request, # type: Dict[str, str]
-                          extra_id_token_claims=None # type: Optional[Union[Mapping[str, Union[str, List[str]]], Callable[[str, str], Mapping[str, Union[str, List[str]]]]]
+    def _do_code_exchange(self, request,  # type: Dict[str, str]
+                          extra_id_token_claims=None  # type: Optional[Union[Mapping[str, Union[str, List[str]]], Callable[[str, str], Mapping[str, Union[str, List[str]]]]]
                           ):
         # type: (...) -> oic.message.AccessTokenResponse
         """
@@ -525,5 +587,68 @@ class Provider(object):
 
         response = OpenIDSchema(sub=introspection['sub'], **user_claims)
         logger.debug('userinfo=%s from requested_claims=%s userinfo=%s extra_claims=%s',
-                     OpenIDSchema(**user_claims), requested_claims, user_claims)
+                     response, requested_claims, user_claims)
         return response
+
+    def _issue_new_client(self):
+        # create unique client id
+        client_id = rndstr(12)
+        while client_id in self.clients:
+            client_id = rndstr(12)
+        # create random secret
+        client_secret = uuid.uuid4().hex
+
+        return client_id, client_secret
+
+    def match_client_preferences_with_provider_capabilities(self, client_preferences):
+        # type: (oic.message.RegistrationRequest) -> Mapping[str, Union[str, List[str]]]
+        """
+        Match as many as of the client preferences as possible.
+        :param client_preferences: requested preferences from client registration request
+        :return: the matched preferences selected by the provider
+        """
+        matched_prefs = client_preferences.to_dict()
+        for pref in ['response_types', 'default_acr_values']:
+            if pref not in client_preferences:
+                continue
+
+            capability = PREFERENCE2PROVIDER[pref]
+            # deal with space separated values
+            client_values = [frozenset(c.split()) for c in client_preferences[pref]]
+            provider_values = [frozenset(p.split()) for p in self.configuration_information[capability]]
+
+            # only preserve the common values
+            matched_values = set(client_values).intersection(provider_values)
+            matched_prefs[pref] = [' '.join(v) for v in matched_values]
+
+        return matched_prefs
+
+    def handle_client_registration_request(self, request, http_headers=None):
+        # type: (Optional[str], Optional[Mapping[str, str]]) -> oic.oic.message.RegistrationResponse
+        """
+        Handles a client registration request.
+        :param request: JSON request from POST body
+        :param http_headers: http headers
+        """
+        registration_req = RegistrationRequest().deserialize(request, 'json')
+
+        for validator in self.registration_request_validators:
+            validator(registration_req)
+        logger.debug('parsed authentication_request: %s', registration_req)
+
+        client_id, client_secret = self._issue_new_client()
+        credentials = {
+            'client_id': client_id,
+            'client_id_issued_at': time.time(),
+            'client_secret': client_secret,
+            'client_secret_expires_at': 0  # never expires
+        }
+
+        response_params = self.match_client_preferences_with_provider_capabilities(registration_req)
+        response_params.update(credentials)
+        self.clients[client_id] = copy.deepcopy(response_params)
+        self.clients[client_id]['response_types'] = [v.split() for v in response_params['response_types']]
+
+        registration_resp = RegistrationResponse(**response_params)
+        logger.debug('registration_resp=%s from registration_req', registration_resp, registration_req)
+        return registration_resp
