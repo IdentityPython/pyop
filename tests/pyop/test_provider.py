@@ -19,8 +19,8 @@ from pyop.authz_state import AuthorizationState
 from pyop.client_authentication import InvalidClientAuthentication
 from pyop.exceptions import InvalidAuthenticationRequest, AuthorizationError, InvalidTokenRequest, \
     InvalidClientRegistrationRequest, InvalidUserinfoRequest
-from pyop.provider import Provider, _redirect_uri_is_in_registered_redirect_uris, \
-    _response_type_is_in_registered_response_types
+from pyop.provider import Provider, redirect_uri_is_in_registered_redirect_uris, \
+    response_type_is_in_registered_response_types
 from pyop.subject_identifier import HashBasedSubjectIdentifierFactory
 from pyop.userinfo import Userinfo
 
@@ -166,12 +166,12 @@ class TestAuthenticationRequestValidators(object):
     def test_redirect_uri_is_in_registered_redirect_uris_with_no_redirect_uris(self, provider_mock):
         auth_req = AuthorizationRequest().from_dict(self.authn_request_args)
         with pytest.raises(InvalidAuthenticationRequest):
-            _redirect_uri_is_in_registered_redirect_uris(provider_mock, auth_req)
+            redirect_uri_is_in_registered_redirect_uris(provider_mock, auth_req)
 
     def test_response_type_is_in_registered_response_types_with_no_response_types(self, provider_mock):
         auth_req = AuthorizationRequest().from_dict(self.authn_request_args)
         with pytest.raises(InvalidAuthenticationRequest):
-            _response_type_is_in_registered_response_types(provider_mock, auth_req)
+            response_type_is_in_registered_response_types(provider_mock, auth_req)
 
 
 @pytest.mark.usefixtures('inject_provider', 'auth_req_args')
