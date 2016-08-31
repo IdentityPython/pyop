@@ -8,7 +8,6 @@ from urllib.parse import urlparse
 
 from jwkest import jws
 from oic import rndstr
-from oic.oauth2.message import ErrorResponse
 from oic.oauth2.message import MissingRequiredAttribute
 from oic.oauth2.message import MissingRequiredValue
 from oic.oic import PREFERENCE2PROVIDER
@@ -26,187 +25,19 @@ from oic.oic.message import RegistrationResponse
 
 from .access_token import extract_bearer_token_from_http_request
 from .client_authentication import verify_client_authentication
+from .exceptions import AuthorizationError
+from .exceptions import InvalidTokenRequest
+from .exceptions import InvalidUserinfoRequest
+from .request_validator import authorization_request_verify
+from .request_validator import client_id_is_known
+from .request_validator import client_preferences_match_provider_capabilities
+from .request_validator import redirect_uri_is_in_registered_redirect_uris
+from .request_validator import registration_request_verify
+from .request_validator import requested_scope_is_supported
+from .request_validator import response_type_is_in_registered_response_types
+from .request_validator import userinfo_claims_only_specified_when_access_token_is_issued
 
 logger = logging.getLogger(__name__)
-
-
-class InvalidAuthenticationRequest(ValueError):
-    def __init__(self, message, parsed_request, oauth_error=None):
-        super().__init__(message)
-        self.request = parsed_request
-        self.oauth_error = oauth_error
-
-    def to_error_url(self):
-        redirect_uri = self.request.get('redirect_uri')
-        if redirect_uri and self.oauth_error:
-            error_resp = ErrorResponse(error=self.oauth_error, error_message=str(self))
-            return error_resp.request(redirect_uri, should_fragment_encode(self.request))
-
-        return None
-
-
-class AuthorizationError(Exception):
-    pass
-
-
-class InvalidTokenRequest(ValueError):
-    def __init__(self, message, oauth_error='invalid_request'):
-        super().__init__(message)
-        self.oauth_error = oauth_error
-
-
-class InvalidUserinfoRequest(ValueError):
-    pass
-
-
-class InvalidClientRegistrationRequest(ValueError):
-    def __init__(self, message, oauth_error='invalid_request'):
-        super().__init__(message)
-        self.oauth_error = oauth_error
-
-
-def should_fragment_encode(authentication_request):
-    if authentication_request['response_type'] == ['code']:
-        # Authorization Code Flow -> query encode
-        return False
-
-    return True
-
-
-def _authorization_request_verify(authentication_request):
-    """
-    Verifies that all required parameters and correct values are included in the authentication request.
-    :param authentication_request: the authentication request to verify
-    :raise InvalidAuthenticationRequest: if the authentication is incorrect
-    """
-    try:
-        authentication_request.verify()
-    except (MissingRequiredValue, MissingRequiredAttribute) as e:
-        raise InvalidAuthenticationRequest(str(e), authentication_request, oauth_error='invalid_request') from e
-
-
-def _client_id_is_known(provider, authentication_request):
-    """
-    Verifies the client identifier is known.
-    :param provider: provider instance
-    :param authentication_request: the authentication request to verify
-    :raise InvalidAuthenticationRequest: if the client_id is unknown
-    """
-    if authentication_request['client_id'] not in provider.clients:
-        raise InvalidAuthenticationRequest('Unknown client_id \'{}\''.format(authentication_request['client_id']),
-                                           authentication_request,
-                                           oauth_error='unauthorized_client')
-
-
-def _redirect_uri_is_in_registered_redirect_uris(provider, authentication_request):
-    """
-    Verifies the redirect uri is registered for the client making the request.
-    :param provider: provider instance
-    :param authentication_request: authentication request to verify
-    :raise InvalidAuthenticationRequest: if the redirect uri is not registered
-    """
-    error = InvalidAuthenticationRequest('Redirect uri \'{}\' is not registered'.format(
-        authentication_request['redirect_uri']),
-        authentication_request)
-    try:
-        allowed_redirect_uris = provider.clients[authentication_request['client_id']]['redirect_uris']
-    except KeyError as e:
-        logger.error('client metadata is missing redirect_uris')
-        raise error
-
-    if authentication_request['redirect_uri'] not in allowed_redirect_uris:
-        raise error
-
-
-def _response_type_is_in_registered_response_types(provider, authentication_request):
-    """
-    Verifies that the requested response type is allowed for the client making the request.
-    :param provider: provider instance
-    :param authentication_request: authentication request to verify
-    :raise InvalidAuthenticationRequest: if the response type is not allowed
-    """
-    error = InvalidAuthenticationRequest('Response type \'{}\' is not registered'.format(
-        ' '.join(authentication_request['response_type'])),
-        authentication_request, oauth_error='invalid_request')
-    try:
-        allowed_response_types = provider.clients[authentication_request['client_id']]['response_types']
-    except KeyError as e:
-        logger.error('client metadata is missing response_types')
-        raise error
-
-    if frozenset(authentication_request['response_type']) not in {frozenset(rt) for rt in allowed_response_types}:
-        raise error
-
-
-def _userinfo_claims_only_specified_when_access_token_is_issued(authentication_request):
-    """
-    According to <a href="http://openid.net/specs/openid-connect-core-1_0.html#ClaimsParameter">
-    "OpenID Connect Core 1.0", Section 5.5</a>: "When the userinfo member is used, the request MUST
-    also use a response_type value that results in an Access Token being issued to the Client for
-    use at the UserInfo Endpoint."
-    :param authentication_request: the authentication request to verify
-    :raise InvalidAuthenticationRequest: if the requested claims can not be returned according to the request
-    """
-    will_issue_access_token = authentication_request['response_type'] != ['id_token']
-    contains_userinfo_claims_request = 'claims' in authentication_request and 'userinfo' in authentication_request[
-        'claims']
-    if not will_issue_access_token and contains_userinfo_claims_request:
-        raise InvalidAuthenticationRequest('Userinfo claims cannot be requested, when response_type=\'id_token\'',
-                                           authentication_request,
-                                           oauth_error='invalid_request')
-
-
-def _requested_scope_is_supported(provider, authentication_request):
-    requested_scopes = set(authentication_request['scope'])
-    supported_scopes = set(provider.provider_configuration['scopes_supported'])
-    requested_unsupported_scopes = requested_scopes - supported_scopes
-    if requested_unsupported_scopes:
-        raise InvalidAuthenticationRequest('Request contains unsupported/unknown scopes: {}'
-                                           .format(', '.join(requested_unsupported_scopes)),
-                                           authentication_request, oauth_error='invalid_scope')
-
-
-def _registration_request_verify(registration_request):
-    """
-    Verifies that all required parameters and correct values are included in the client registration request.
-    :param registration_request: the authentication request to verify
-    :raise InvalidClientRegistrationRequest: if the registration is incorrect
-    """
-    try:
-        registration_request.verify()
-    except (MissingRequiredValue, MissingRequiredAttribute) as e:
-        raise InvalidClientRegistrationRequest(str(e), oauth_error='invalid_request') from e
-
-
-def _client_preferences_match_provider_capabilities(provider, registration_request):
-    """
-    Verifies that all requested preferences in the client metadata can be fulfilled by this provider.
-    :param registration_request: the authentication request to verify
-    :raise InvalidClientRegistrationRequest: if the registration is incorrect
-    """
-
-    def match(client_preference, provider_capability):
-        if isinstance(client_preference, list):
-            # deal with comparing space separated values, e.g. 'response_types', without considering the order
-            client_values = [set(c.split()) for c in client_preference]
-            provider_values = [set(p.split()) for p in provider_capability]
-
-            # at least one requested preference must be matched
-            return any(v in provider_values for v in client_values)
-        return client_preference in provider_capability
-
-    for client_preference in registration_request.keys():
-        if client_preference not in PREFERENCE2PROVIDER:
-            # metadata parameter that shouldn't be matched
-            continue
-
-        provider_capability = PREFERENCE2PROVIDER[client_preference]
-        if not match(registration_request[client_preference], provider.configuration_information[provider_capability]):
-            raise InvalidClientRegistrationRequest(
-                'Could not match client preference {}={} with provider capability {}={}'.format(
-                    client_preference, registration_request[client_preference], provider_capability,
-                    provider.configuration_information[provider_capability]),
-                oauth_error='invalid_request')
 
 
 class Provider(object):
@@ -242,20 +73,20 @@ class Provider(object):
         self.id_token_lifetime = id_token_lifetime
 
         self.authentication_request_validators = []  # type: List[Callable[[oic.oic.message.AuthorizationRequest], Boolean]]
-        self.authentication_request_validators.append(_authorization_request_verify)
+        self.authentication_request_validators.append(authorization_request_verify)
         self.authentication_request_validators.append(
-            functools.partial(_client_id_is_known, self))
+            functools.partial(client_id_is_known, self))
         self.authentication_request_validators.append(
-            functools.partial(_redirect_uri_is_in_registered_redirect_uris, self))
+            functools.partial(redirect_uri_is_in_registered_redirect_uris, self))
         self.authentication_request_validators.append(
-            functools.partial(_response_type_is_in_registered_response_types, self))
-        self.authentication_request_validators.append(_userinfo_claims_only_specified_when_access_token_is_issued)
-        self.authentication_request_validators.append(functools.partial(_requested_scope_is_supported, self))
+            functools.partial(response_type_is_in_registered_response_types, self))
+        self.authentication_request_validators.append(userinfo_claims_only_specified_when_access_token_is_issued)
+        self.authentication_request_validators.append(functools.partial(requested_scope_is_supported, self))
 
         self.registration_request_validators = []  # type: List[Callable[[oic.oic.message.RegistrationRequest], Boolean]]
-        self.registration_request_validators.append(_registration_request_verify)
+        self.registration_request_validators.append(registration_request_verify)
         self.registration_request_validators.append(
-            functools.partial(_client_preferences_match_provider_capabilities, self))
+            functools.partial(client_preferences_match_provider_capabilities, self))
 
     @property
     def provider_configuration(self):
@@ -292,7 +123,8 @@ class Provider(object):
 
     def authorize(self, authentication_request,  # type: oic.oic.message.AuthorizationRequest
                   user_id,  # type: str
-                  extra_id_token_claims=None  # type: Optional[Union[Mapping[str, Union[str, List[str]]], Callable[[str, str], Mapping[str, Union[str, List[str]]]]]
+                  extra_id_token_claims=None
+                  # type: Optional[Union[Mapping[str, Union[str, List[str]]], Callable[[str, str], Mapping[str, Union[str, List[str]]]]]
                   ):
         # type: (...) -> oic.oic.message.AuthorizationResponse
         """
@@ -454,7 +286,8 @@ class Provider(object):
 
     def handle_token_request(self, request_body,  # type: str
                              http_headers=None,  # type: Optional[Mapping[str, str]]
-                             extra_id_token_claims=None  # type: Optional[Union[Mapping[str, Union[str, List[str]]], Callable[[str, str], Mapping[str, Union[str, List[str]]]]]
+                             extra_id_token_claims=None
+                             # type: Optional[Union[Mapping[str, Union[str, List[str]]], Callable[[str, str], Mapping[str, Union[str, List[str]]]]]
                              ):
         # type: (...) -> oic.oic.message.AccessTokenResponse
         """
@@ -477,7 +310,8 @@ class Provider(object):
                                   oauth_error='unsupported_grant_type')
 
     def _do_code_exchange(self, request,  # type: Dict[str, str]
-                          extra_id_token_claims=None  # type: Optional[Union[Mapping[str, Union[str, List[str]]], Callable[[str, str], Mapping[str, Union[str, List[str]]]]]
+                          extra_id_token_claims=None
+                          # type: Optional[Union[Mapping[str, Union[str, List[str]]], Callable[[str, str], Mapping[str, Union[str, List[str]]]]]
                           ):
         # type: (...) -> oic.message.AccessTokenResponse
         """

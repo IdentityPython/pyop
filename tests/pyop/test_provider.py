@@ -17,9 +17,10 @@ from oic.oic.message import IdToken, AuthorizationRequest, ClaimsRequest, Claims
 from pyop.access_token import BearerTokenError
 from pyop.authz_state import AuthorizationState
 from pyop.client_authentication import InvalidClientAuthentication
-from pyop.provider import Provider, InvalidAuthenticationRequest, AuthorizationError, InvalidTokenRequest, \
-    InvalidUserinfoRequest, should_fragment_encode, _redirect_uri_is_in_registered_redirect_uris, \
-    _response_type_is_in_registered_response_types, InvalidClientRegistrationRequest
+from pyop.exceptions import InvalidAuthenticationRequest, AuthorizationError, InvalidTokenRequest, \
+    InvalidClientRegistrationRequest, InvalidUserinfoRequest
+from pyop.provider import Provider, redirect_uri_is_in_registered_redirect_uris, \
+    response_type_is_in_registered_response_types
 from pyop.subject_identifier import HashBasedSubjectIdentifierFactory
 from pyop.userinfo import Userinfo
 
@@ -165,12 +166,12 @@ class TestAuthenticationRequestValidators(object):
     def test_redirect_uri_is_in_registered_redirect_uris_with_no_redirect_uris(self, provider_mock):
         auth_req = AuthorizationRequest().from_dict(self.authn_request_args)
         with pytest.raises(InvalidAuthenticationRequest):
-            _redirect_uri_is_in_registered_redirect_uris(provider_mock, auth_req)
+            redirect_uri_is_in_registered_redirect_uris(provider_mock, auth_req)
 
     def test_response_type_is_in_registered_response_types_with_no_response_types(self, provider_mock):
         auth_req = AuthorizationRequest().from_dict(self.authn_request_args)
         with pytest.raises(InvalidAuthenticationRequest):
-            _response_type_is_in_registered_response_types(provider_mock, auth_req)
+            response_type_is_in_registered_response_types(provider_mock, auth_req)
 
 
 @pytest.mark.usefixtures('inject_provider', 'auth_req_args')
@@ -485,7 +486,7 @@ class TestProviderHandleRegistrationRequest(object):
         request = {'redirect_uris': ['https://client.example.com/redirect'], client_preference: client_value}
         response = provider.handle_client_registration_request(json.dumps(request))
         expected_values = set(client_value).intersection(provider_value)
-        assert Counter(frozenset(v.split()) for v in response[client_preference]) ==\
+        assert Counter(frozenset(v.split()) for v in response[client_preference]) == \
                Counter(frozenset(v.split()) for v in expected_values)
 
     def test_match_space_separated_response_type_without_order(self):
@@ -521,17 +522,3 @@ class TestProviderJWKS(object):
     def test_jwks(self):
         provider = Provider(rsa_key(), {'issuer': ISSUER}, None, None, None)
         assert provider.jwks == {'keys': [provider.signing_key.serialize()]}
-
-
-class TestShouldFragmentEncode(object):
-    @pytest.mark.parametrize('response_type, expected', [
-        ('code', False),
-        ('id_token', True),
-        ('id_token token', True),
-        ('code id_token', True),
-        ('code token', True),
-        ('code id_token token', True),
-    ])
-    def test_by_response_type(self, response_type, expected):
-        auth_req = {'response_type': response_type}
-        assert should_fragment_encode(AuthorizationRequest(**auth_req)) is expected

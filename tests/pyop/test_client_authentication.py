@@ -1,9 +1,9 @@
 import base64
-from urllib.parse import urlencode
 
 import pytest
 
-from pyop.client_authentication import InvalidClientAuthentication, verify_client_authentication
+from pyop.client_authentication import verify_client_authentication
+from pyop.exceptions import InvalidClientAuthentication
 
 TEST_CLIENT_ID = 'client1'
 TEST_CLIENT_SECRET = 'my_secret'
