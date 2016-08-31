@@ -16,6 +16,7 @@ from oic.oic.message import AuthorizationRequest
 from oic.oic.message import AuthorizationResponse
 from oic.oic.message import IdToken
 from oic.oic.message import OpenIDSchema
+from oic.oic.message import ProviderConfigurationResponse
 from oic.oic.message import RefreshAccessTokenRequest
 
 from .access_token import extract_bearer_token_from_http_request, BearerTokenError
@@ -170,13 +171,16 @@ class Provider(object):
         :param id_token_lifetime: how long the signed ID Tokens should be valid (in seconds), defaults to 1 hour
         """
         self.signing_key = signing_key
-        self.configuration_information = configuration_information
+        self.configuration_information = ProviderConfigurationResponse(**configuration_information)
         if 'subject_types_supported' not in configuration_information:
             self.configuration_information['subject_types_supported'] = ['pairwise']
         if 'id_token_signing_alg_values_supported' not in configuration_information:
             self.configuration_information['id_token_signing_alg_values_supported'] = ['RS256']
         if 'scopes_supported' not in configuration_information:
             self.configuration_information['scopes_supported'] = ['openid']
+        if 'response_types_supported' not in configuration_information:
+            self.configuration_information['response_types_supported'] = ['code', 'id_token', 'token id_token']
+        self.configuration_information.verify()
 
         self.authz_state = authz_state
         self.clients = clients

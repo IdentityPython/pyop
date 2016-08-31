@@ -398,14 +398,15 @@ class TestProviderHandleUserinfoRequest(object):
 
 class TestProviderProviderConfiguration(object):
     def test_provider_configuration(self):
-        config = {'foo': 'bar', 'abc': 'xyz'}
+        config = {'issuer': ISSUER, 'foo': 'bar', 'abc': 'xyz'}
         provider = Provider(None, config, None, None, None)
-        assert provider.provider_configuration == config
+        provider_config = provider.provider_configuration
+        assert all(k in provider_config for k in config)
 
 
 class TestProviderJWKS(object):
     def test_jwks(self):
-        provider = Provider(rsa_key(), {}, None, None, None)
+        provider = Provider(rsa_key(), {'issuer': ISSUER}, None, None, None)
         assert provider.jwks == {'keys': [provider.signing_key.serialize()]}
 
 
