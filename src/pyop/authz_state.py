@@ -260,8 +260,9 @@ class AuthorizationState(object):
 
         if subject_type == 'public':
             if 'public' not in self.subject_identifiers[user_id]:
-                self.subject_identifiers[user_id]['public'] = \
-                    self._subject_identifier_factory.create_public_identifier(user_id)
+                new_sub = self._subject_identifier_factory.create_public_identifier(user_id)
+                self.subject_identifiers[user_id] = {'public': new_sub}
+
                 logger.debug('created new public sub=% for user_id=%s',
                              self.subject_identifiers[user_id]['public'], user_id)
             sub = self.subject_identifiers[user_id]['public']
