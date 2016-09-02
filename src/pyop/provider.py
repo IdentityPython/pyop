@@ -26,8 +26,8 @@ from oic.oic.message import RegistrationResponse
 from .access_token import extract_bearer_token_from_http_request
 from .client_authentication import verify_client_authentication
 from .exceptions import AuthorizationError
+from .exceptions import InvalidAccessToken
 from .exceptions import InvalidTokenRequest
-from .exceptions import InvalidUserinfoRequest
 from .request_validator import authorization_request_verify
 from .request_validator import client_id_is_known
 from .request_validator import client_preferences_match_provider_capabilities
@@ -410,7 +410,7 @@ class Provider(object):
 
         introspection = self.authz_state.introspect_access_token(bearer_token)
         if not introspection['active']:
-            raise InvalidUserinfoRequest('The access token has expired')
+            raise InvalidAccessToken('The access token has expired')
         scope = introspection['scope']
         user_id = self.authz_state.get_user_id_for_subject_identifier(introspection['sub'])
 

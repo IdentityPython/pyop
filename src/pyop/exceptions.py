@@ -58,8 +58,6 @@ class InvalidTokenRequest(ValueError):
         self.oauth_error = oauth_error
 
 
-class InvalidUserinfoRequest(ValueError):
-    pass
 
 
 class InvalidClientRegistrationRequest(ValueError):

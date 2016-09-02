@@ -18,7 +18,7 @@ from pyop.access_token import BearerTokenError
 from pyop.authz_state import AuthorizationState
 from pyop.client_authentication import InvalidClientAuthentication
 from pyop.exceptions import InvalidAuthenticationRequest, AuthorizationError, InvalidTokenRequest, \
-    InvalidClientRegistrationRequest, InvalidUserinfoRequest
+    InvalidClientRegistrationRequest, InvalidAccessToken
 from pyop.provider import Provider, redirect_uri_is_in_registered_redirect_uris, \
     response_type_is_in_registered_response_types
 from pyop.subject_identifier import HashBasedSubjectIdentifierFactory
@@ -396,7 +396,7 @@ class TestProviderHandleUserinfoRequest(object):
     def test_handle_userinfo_rejects_invalid_access_token(self):
         access_token = self.create_access_token()
         self.provider.authz_state.access_tokens[access_token]['exp'] = 0
-        with pytest.raises(InvalidUserinfoRequest):
+        with pytest.raises(InvalidAccessToken):
             self.provider.handle_userinfo_request(urlencode({'access_token': access_token}))
 
 
