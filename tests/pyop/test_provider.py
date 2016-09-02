@@ -366,6 +366,34 @@ class TestProviderHandleTokenRequest(object):
         assert self.provider.authz_state.access_tokens[response['access_token']]['scope'] == self.authn_request_args[
             'scope']
 
+    @pytest.mark.parametrize('missing_parameter', [
+        'grant_type',
+        'code',
+        'redirect_uri'
+    ])
+    def test_code_exchange_request_with_missing_parameter(self, missing_parameter):
+        request_args = {
+            'grant_type': 'authorization_code',
+            'code': None,
+            'redirect_uri': TEST_REDIRECT_URI,
+        }
+        del request_args[missing_parameter]
+        with pytest.raises(InvalidTokenRequest):
+            self.provider._do_code_exchange(request_args)
+
+    @pytest.mark.parametrize('missing_parameter', [
+        'grant_type',
+        'refresh_token',
+    ])
+    def test_refresh_token_request_with_missing_parameter(self, missing_parameter):
+        request_args = {
+            'grant_type': 'refresh_token',
+            'refresh_token': None,
+        }
+        del request_args[missing_parameter]
+        with pytest.raises(InvalidTokenRequest):
+            self.provider._do_token_refresh(request_args)
+
 
 @pytest.mark.usefixtures('inject_provider', 'auth_req_args')
 class TestProviderHandleUserinfoRequest(object):

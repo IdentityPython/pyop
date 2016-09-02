@@ -1,43 +1,52 @@
-import json
-
-from oic.oauth2.message import ErrorResponse
+from oic.oic.message import AuthorizationErrorResponse, ClientRegistrationErrorResponse
 
 from .util import should_fragment_encode
 
 
-class BearerTokenError(ValueError):
-    pass
+class OAuthError(ValueError):
+    def __init__(self, message, oauth_error):
+        super().__init__(message)
+        self.oauth_error = oauth_error
 
 
-class InvalidAuthorizationCode(ValueError):
-    pass
+class InvalidAuthorizationCode(OAuthError):
+    def __init__(self, message):
+        super().__init__(message, 'invalid_grant')
 
 
-class InvalidAccessToken(ValueError):
-    pass
+class InvalidRefreshToken(OAuthError):
+    def __init__(self, message):
+        super().__init__(message, 'invalid_grant')
 
 
-class InvalidRefreshToken(ValueError):
-    pass
+class InvalidAccessToken(OAuthError):
+    def __init__(self, message):
+        super().__init__(message, 'invalid_token')
+
+
+class InvalidScope(OAuthError):
+    def __init__(self, message):
+        super().__init__(message, 'invalid_scope')
+
+
+class InvalidClientAuthentication(OAuthError):
+    def __init__(self, message):
+        super().__init__(message, 'invalid_client')
 
 
 class InvalidSubjectIdentifier(ValueError):
     pass
 
 
-class InvalidScope(ValueError):
-    pass
-
-
-class InvalidClientAuthentication(ValueError):
-    pass
-
-
-class InvalidAuthenticationRequest(ValueError):
-    def __init__(self, message, parsed_request, oauth_error=None):
-        super().__init__(message)
+class InvalidRequestError(OAuthError):
+    def __init__(self, message, parsed_request, oauth_error):
+        super().__init__(message, oauth_error)
         self.request = parsed_request
-        self.oauth_error = oauth_error
+
+
+class InvalidAuthenticationRequest(InvalidRequestError):
+    def __init__(self, message, parsed_request, oauth_error=None):
+        super().__init__(message, parsed_request, oauth_error)
 
     def to_error_url(self):
         redirect_uri = self.request.get('redirect_uri')
@@ -48,23 +57,23 @@ class InvalidAuthenticationRequest(ValueError):
         return None
 
 
-class AuthorizationError(Exception):
-    pass
-
-
-class InvalidTokenRequest(ValueError):
-    def __init__(self, message, oauth_error='invalid_request'):
-        super().__init__(message)
-        self.oauth_error = oauth_error
-
-
+class InvalidTokenRequest(InvalidRequestError):
+    def __init__(self, message, parsed_request, oauth_error='invalid_request'):
+        super().__init__(message, parsed_request, oauth_error)
 
 
 class InvalidClientRegistrationRequest(ValueError):
-    def __init__(self, message, oauth_error='invalid_request'):
-        super().__init__(message)
-        self.oauth_error = oauth_error
+    def __init__(self, message, parsed_request, oauth_error='invalid_request'):
+        super().__init__(message, parsed_request, oauth_error)
 
     def to_json(self):
-        error = {'error': self.oauth_error, 'error_description': str(self)}
-        return json.dumps(error)
+        error = ClientRegistrationErrorResponse(error=self.oauth_error, error_description=str(self))
+        return error.to_json()
+
+
+class BearerTokenError(ValueError):
+    pass
+
+
+class AuthorizationError(Exception):
+    pass
