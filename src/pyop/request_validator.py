@@ -41,8 +41,7 @@ def redirect_uri_is_in_registered_redirect_uris(provider, authentication_request
     :raise InvalidAuthenticationRequest: if the redirect uri is not registered
     """
     error = InvalidAuthenticationRequest('Redirect uri \'{}\' is not registered'.format(
-        authentication_request['redirect_uri']),
-        authentication_request)
+        authentication_request['redirect_uri']), authentication_request)
     try:
         allowed_redirect_uris = provider.clients[authentication_request['client_id']]['redirect_uris']
     except KeyError as e:
@@ -110,7 +109,7 @@ def registration_request_verify(registration_request):
     try:
         registration_request.verify()
     except MessageException as e:
-        raise InvalidClientRegistrationRequest(str(e), oauth_error='invalid_request') from e
+        raise InvalidClientRegistrationRequest(str(e), registration_request, oauth_error='invalid_request') from e
 
 
 def client_preferences_match_provider_capabilities(provider, registration_request):
@@ -141,4 +140,5 @@ def client_preferences_match_provider_capabilities(provider, registration_reques
                 'Could not match client preference {}={} with provider capability {}={}'.format(
                     client_preference, registration_request[client_preference], provider_capability,
                     provider.configuration_information[provider_capability]),
+                registration_request,
                 oauth_error='invalid_request')

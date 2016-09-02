@@ -8,6 +8,7 @@ from urllib.parse import urlparse
 
 from jwkest import jws
 from oic import rndstr
+from oic.exception import MessageException
 from oic.oauth2.message import MissingRequiredAttribute
 from oic.oauth2.message import MissingRequiredValue
 from oic.oic import PREFERENCE2PROVIDER
@@ -26,8 +27,8 @@ from oic.oic.message import RegistrationResponse
 from .access_token import extract_bearer_token_from_http_request
 from .client_authentication import verify_client_authentication
 from .exceptions import AuthorizationError
+from .exceptions import InvalidAccessToken
 from .exceptions import InvalidTokenRequest
-from .exceptions import InvalidUserinfoRequest
 from .request_validator import authorization_request_verify
 from .request_validator import client_id_is_known
 from .request_validator import client_preferences_match_provider_capabilities
@@ -300,13 +301,13 @@ class Provider(object):
         token_request = self._verify_client_authentication(request_body, http_headers)
 
         if 'grant_type' not in token_request:
-            raise InvalidTokenRequest('grant_type missing')
+            raise InvalidTokenRequest('grant_type missing', token_request)
         elif token_request['grant_type'] == 'authorization_code':
             return self._do_code_exchange(token_request, extra_id_token_claims)
         elif token_request['grant_type'] == 'refresh_token':
             return self._do_token_refresh(token_request)
 
-        raise InvalidTokenRequest('grant_type \'{}\' unknown'.format(token_request['grant_type']),
+        raise InvalidTokenRequest('grant_type \'{}\' unknown'.format(token_request['grant_type']), token_request,
                                   oauth_error='unsupported_grant_type')
 
     def _do_code_exchange(self, request,  # type: Dict[str, str]
@@ -327,14 +328,15 @@ class Provider(object):
         token_request = AccessTokenRequest().from_dict(request)
         try:
             token_request.verify()
-        except (MissingRequiredValue, MissingRequiredAttribute) as e:
-            raise InvalidTokenRequest(str(e)) from e
+        except MessageException as e:
+            raise InvalidTokenRequest(str(e), token_request) from e
 
         authentication_request = self.authz_state.get_authorization_request_for_code(token_request['code'])
 
         if token_request['redirect_uri'] != authentication_request['redirect_uri']:
             raise InvalidTokenRequest('Invalid redirect_uri: {} != {}'.format(token_request['redirect_uri'],
-                                                                              authentication_request['redirect_uri']))
+                                                                              authentication_request['redirect_uri']),
+                                      token_request)
 
         sub = self.authz_state.get_subject_identifier_for_code(token_request['code'])
         user_id = self.authz_state.get_user_id_for_subject_identifier(sub)
@@ -372,8 +374,8 @@ class Provider(object):
         token_request = RefreshAccessTokenRequest().from_dict(request)
         try:
             token_request.verify()
-        except (MissingRequiredValue, MissingRequiredAttribute) as e:
-            raise InvalidTokenRequest(str(e)) from e
+        except MessageException as e:
+            raise InvalidTokenRequest(str(e), token_request) from e
 
         response = AccessTokenResponse()
 
@@ -410,7 +412,7 @@ class Provider(object):
 
         introspection = self.authz_state.introspect_access_token(bearer_token)
         if not introspection['active']:
-            raise InvalidUserinfoRequest('The access token has expired')
+            raise InvalidAccessToken('The access token has expired')
         scope = introspection['scope']
         user_id = self.authz_state.get_user_id_for_subject_identifier(introspection['sub'])
 

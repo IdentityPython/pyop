@@ -18,7 +18,7 @@ from pyop.access_token import BearerTokenError
 from pyop.authz_state import AuthorizationState
 from pyop.client_authentication import InvalidClientAuthentication
 from pyop.exceptions import InvalidAuthenticationRequest, AuthorizationError, InvalidTokenRequest, \
-    InvalidClientRegistrationRequest, InvalidUserinfoRequest
+    InvalidClientRegistrationRequest, InvalidAccessToken
 from pyop.provider import Provider, redirect_uri_is_in_registered_redirect_uris, \
     response_type_is_in_registered_response_types
 from pyop.subject_identifier import HashBasedSubjectIdentifierFactory
@@ -366,6 +366,34 @@ class TestProviderHandleTokenRequest(object):
         assert self.provider.authz_state.access_tokens[response['access_token']]['scope'] == self.authn_request_args[
             'scope']
 
+    @pytest.mark.parametrize('missing_parameter', [
+        'grant_type',
+        'code',
+        'redirect_uri'
+    ])
+    def test_code_exchange_request_with_missing_parameter(self, missing_parameter):
+        request_args = {
+            'grant_type': 'authorization_code',
+            'code': None,
+            'redirect_uri': TEST_REDIRECT_URI,
+        }
+        del request_args[missing_parameter]
+        with pytest.raises(InvalidTokenRequest):
+            self.provider._do_code_exchange(request_args)
+
+    @pytest.mark.parametrize('missing_parameter', [
+        'grant_type',
+        'refresh_token',
+    ])
+    def test_refresh_token_request_with_missing_parameter(self, missing_parameter):
+        request_args = {
+            'grant_type': 'refresh_token',
+            'refresh_token': None,
+        }
+        del request_args[missing_parameter]
+        with pytest.raises(InvalidTokenRequest):
+            self.provider._do_token_refresh(request_args)
+
 
 @pytest.mark.usefixtures('inject_provider', 'auth_req_args')
 class TestProviderHandleUserinfoRequest(object):
@@ -396,7 +424,7 @@ class TestProviderHandleUserinfoRequest(object):
     def test_handle_userinfo_rejects_invalid_access_token(self):
         access_token = self.create_access_token()
         self.provider.authz_state.access_tokens[access_token]['exp'] = 0
-        with pytest.raises(InvalidUserinfoRequest):
+        with pytest.raises(InvalidAccessToken):
             self.provider.handle_userinfo_request(urlencode({'access_token': access_token}))
 
 
