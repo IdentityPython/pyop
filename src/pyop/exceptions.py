@@ -64,7 +64,7 @@ class InvalidTokenRequest(InvalidRequestError):
         super().__init__(message, parsed_request, oauth_error)
 
 
-class InvalidClientRegistrationRequest(ValueError):
+class InvalidClientRegistrationRequest(InvalidRequestError):
     def __init__(self, message, parsed_request, oauth_error='invalid_request'):
         super().__init__(message, parsed_request, oauth_error)
 
