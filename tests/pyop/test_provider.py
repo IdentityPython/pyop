@@ -350,11 +350,15 @@ class TestProviderHandleTokenRequest(object):
         assert response['access_token'] in self.provider.authz_state.access_tokens
         assert 'refresh_token' not in response
 
-    def test_refresh_request_with_expiring_refresh_token_issues_new_refresh_token(self):
+    def test_refresh_request_with_refresh_token_close_to_expiry_issues_new_refresh_token(self):
         self.provider.authz_state = AuthorizationState(HashBasedSubjectIdentifierFactory('salt'),
-                                                       refresh_token_lifetime=10)
+                                                       refresh_token_lifetime=10,
+                                                       refresh_token_threshold=2)
         self.refresh_token_request_args['refresh_token'] = self.create_refresh_token()
-        response = self.provider.handle_token_request(urlencode(self.refresh_token_request_args))
+
+        close_to_expiration = time.time() + self.provider.authz_state.refresh_token_lifetime - 1
+        with patch('time.time', Mock(return_value=close_to_expiration)):
+            response = self.provider.handle_token_request(urlencode(self.refresh_token_request_args))
         assert response['access_token'] in self.provider.authz_state.access_tokens
         assert response['refresh_token'] in self.provider.authz_state.refresh_tokens
 

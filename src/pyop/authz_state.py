@@ -26,9 +26,10 @@ class AuthorizationState(object):
 
     def __init__(self, subject_identifier_factory, authorization_code_db=None, access_token_db=None,
                  refresh_token_db=None, subject_identifier_db=None, *,
-                 authorization_code_lifetime=600, access_token_lifetime=3600, refresh_token_lifetime=None):
+                 authorization_code_lifetime=600, access_token_lifetime=3600, refresh_token_lifetime=None,
+                 refresh_token_threshold=None):
         # type: (se_leg_op.token_state.SubjectIdentifierFactory, Mapping[str, Any], Mapping[str, Any],
-        #        Mapping[str, Any], Mapping[str, Any], int, int, Optional[int]) -> None
+        #        Mapping[str, Any], Mapping[str, Any], int, int, Optional[int], Optional[int]) -> None
         """
         :param subject_identifier_factory: callable to use when construction subject identifiers
         :param authorization_code_db: database for storing authorization codes, defaults to in-memory
@@ -45,7 +46,8 @@ class AuthorizationState(object):
             defaults to 1 hour
         :param refresh_token_lifetime: how long before refresh tokens should expire (in seconds),
             defaults to never expiring
-        :return:
+        :param refresh_token_threshold: how long before refresh token expiry time a new one should be issued (in
+            seconds) in a token refresh request, defaults to never issuing a new refresh token
         """
 
         if not subject_identifier_factory:
@@ -65,6 +67,7 @@ class AuthorizationState(object):
         self.access_tokens = access_token_db or {}
 
         self.refresh_token_lifetime = refresh_token_lifetime
+        self.refresh_token_threshold = refresh_token_threshold
         """
         Mapping of refresh tokens to access tokens.
         """
@@ -233,7 +236,10 @@ class AuthorizationState(object):
                                                      authz_info['granted_scope'], scope)
 
         new_refresh_token = None
-        if 'exp' in refresh_token_info:
+        if self.refresh_token_threshold \
+                and 'exp' in refresh_token_info \
+                and refresh_token_info['exp'] - time.time() < self.refresh_token_threshold:
+            # refresh token is close to expiry, issue a new one
             new_refresh_token = self.create_refresh_token(new_access_token.value)
         else:
             self.refresh_tokens[refresh_token]['access_token'] = new_access_token.value

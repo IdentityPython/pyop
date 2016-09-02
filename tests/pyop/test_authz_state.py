@@ -247,19 +247,49 @@ class TestAuthorizationState(object):
         with pytest.raises(InvalidRefreshToken):
             authorization_state.use_refresh_token(refresh_token)
 
-    def test_use_refresh_token_issues_new_refresh_token_if_the_old_has_expiration_time(self,
-                                                                                       authorization_state_factory,
-                                                                                       authorization_request):
-        authorization_state = authorization_state_factory(refresh_token_lifetime=40)
+    def test_use_refresh_token_issues_new_refresh_token_if_the_old_is_close_to_expiration(
+            self, authorization_state_factory, authorization_request):
+        refresh_threshold = 3600
+        authorization_state = authorization_state_factory(refresh_token_lifetime=refresh_threshold * 2,
+                                                          refresh_token_threshold=refresh_threshold)
+        self.set_valid_subject_identifier(authorization_state)
+
+        old_access_token = authorization_state.create_access_token(authorization_request, self.TEST_SUBJECT_IDENTIFIER)
+        refresh_token = authorization_state.create_refresh_token(old_access_token.value)
+
+        close_to_expiration = time.time() + authorization_state.refresh_token_lifetime - 50
+        with patch('time.time', Mock(return_value=close_to_expiration)):
+            new_access_token, new_refresh_token = authorization_state.use_refresh_token(refresh_token)
+
+        assert new_refresh_token is not None
+        assert new_refresh_token in authorization_state.refresh_tokens
+        assert authorization_state.refresh_tokens[new_refresh_token]['access_token'] == new_access_token.value
+
+    def test_use_refresh_token_doesnt_issue_new_refresh_token_if_the_old_is_far_from_expiration(
+            self, authorization_state_factory, authorization_request):
+        refresh_threshold = 3600
+        authorization_state = authorization_state_factory(refresh_token_lifetime=refresh_threshold * 2,
+                                                          refresh_token_threshold=refresh_threshold)
+
         self.set_valid_subject_identifier(authorization_state)
 
         old_access_token = authorization_state.create_access_token(authorization_request, self.TEST_SUBJECT_IDENTIFIER)
         refresh_token = authorization_state.create_refresh_token(old_access_token.value)
         new_access_token, new_refresh_token = authorization_state.use_refresh_token(refresh_token)
 
-        assert new_refresh_token is not None
-        assert new_refresh_token in authorization_state.refresh_tokens
-        assert authorization_state.refresh_tokens[new_refresh_token]['access_token'] == new_access_token.value
+        assert new_refresh_token is None
+
+    def test_use_refresh_token_doesnt_issue_new_refresh_token_if_no_refresh_token_threshold_is_set(
+            self, authorization_state_factory, authorization_request):
+        authorization_state = authorization_state_factory(refresh_token_lifetime=400)
+
+        self.set_valid_subject_identifier(authorization_state)
+
+        old_access_token = authorization_state.create_access_token(authorization_request, self.TEST_SUBJECT_IDENTIFIER)
+        refresh_token = authorization_state.create_refresh_token(old_access_token.value)
+        new_access_token, new_refresh_token = authorization_state.use_refresh_token(refresh_token)
+
+        assert new_refresh_token is None
 
     def test_use_refresh_token_with_expired_refresh_token(self, authorization_state_factory, authorization_request):
         refresh_token_lifetime = 2
