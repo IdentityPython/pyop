@@ -51,7 +51,8 @@ class InvalidAuthenticationRequest(InvalidRequestError):
     def to_error_url(self):
         redirect_uri = self.request.get('redirect_uri')
         if redirect_uri and self.oauth_error:
-            error_resp = ErrorResponse(error=self.oauth_error, error_message=str(self))
+            error_resp = AuthorizationErrorResponse(error=self.oauth_error, error_message=str(self),
+                                                    state=self.request.get('state'))
             return error_resp.request(redirect_uri, should_fragment_encode(self.request))
 
         return None
