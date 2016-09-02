@@ -31,7 +31,10 @@ def verify_client_authentication(parsed_request, clients, authz_header=None):
             missing_padding = 4 - len(credentials) % 4
             if missing_padding:
                 credentials += '=' * missing_padding
-            auth = base64.urlsafe_b64decode(credentials.encode('utf-8')).decode('utf-8')
+            try:
+                auth = base64.urlsafe_b64decode(credentials.encode('utf-8')).decode('utf-8')
+            except UnicodeDecodeError as e:
+                raise InvalidClientAuthentication('Could not userid/password from authorization header'.format(authz_scheme))
             client_id, client_secret = auth.split(':')
         else:
             raise InvalidClientAuthentication('Unknown scheme in authorization header, {} != Basic'.format(authz_scheme))

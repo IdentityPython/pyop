@@ -79,3 +79,7 @@ class TestVerifyClientAuthentication(object):
         with pytest.raises(InvalidClientAuthentication):
             verify_client_authentication(self.token_request_args, self.clients,
                                          authz_header.replace('Basic', 'invalid'))
+
+    def test_invalid_userid_password(self):
+        with pytest.raises(InvalidClientAuthentication):
+            verify_client_authentication(self.token_request_args, self.clients, 'Basic invalid')
