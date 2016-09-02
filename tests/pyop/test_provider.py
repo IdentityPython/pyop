@@ -345,6 +345,8 @@ class TestProviderHandleTokenRequest(object):
             self.provider.handle_token_request(urlencode(self.authorization_code_exchange_request_args))
 
     def test_refresh_request(self):
+        self.provider.authz_state = AuthorizationState(HashBasedSubjectIdentifierFactory('salt'),
+                                                       refresh_token_lifetime=600)
         self.refresh_token_request_args['refresh_token'] = self.create_refresh_token()
         response = self.provider.handle_token_request(urlencode(self.refresh_token_request_args))
         assert response['access_token'] in self.provider.authz_state.access_tokens
@@ -363,6 +365,8 @@ class TestProviderHandleTokenRequest(object):
         assert response['refresh_token'] in self.provider.authz_state.refresh_tokens
 
     def test_refresh_request_without_scope_parameter_defaults_to_scope_from_authentication_request(self):
+        self.provider.authz_state = AuthorizationState(HashBasedSubjectIdentifierFactory('salt'),
+                                                       refresh_token_lifetime=600)
         self.refresh_token_request_args['refresh_token'] = self.create_refresh_token()
         del self.refresh_token_request_args['scope']
         response = self.provider.handle_token_request(urlencode(self.refresh_token_request_args))

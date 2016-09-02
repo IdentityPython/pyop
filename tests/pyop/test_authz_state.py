@@ -34,9 +34,8 @@ class TestAuthorizationState(object):
         return functools.partial(AuthorizationState, HashBasedSubjectIdentifierFactory('salt'))
 
     @pytest.fixture
-    def authorization_state(self):
-        factory = self.authorization_state_factory()
-        return factory()
+    def authorization_state(self, authorization_state_factory):
+        return authorization_state_factory(refresh_token_lifetime=3600)
 
     def assert_access_token(self, access_token, access_token_db, iat):
         assert isinstance(access_token, AccessToken)
@@ -196,7 +195,17 @@ class TestAuthorizationState(object):
 
         assert refresh_token in authorization_state.refresh_tokens
         assert authorization_state.refresh_tokens[refresh_token]['access_token'] == access_token.value
-        assert 'exp' not in authorization_state.refresh_tokens[refresh_token]
+        assert 'exp' in authorization_state.refresh_tokens[refresh_token]
+
+    def test_create_refresh_token_issues_no_refresh_token_if_no_lifetime_is_specified(self, authorization_state_factory,
+                                                                                      authorization_request):
+        authorization_state = authorization_state_factory(refresh_token_lifetime=None)
+        self.set_valid_subject_identifier(authorization_state)
+
+        access_token = authorization_state.create_access_token(authorization_request, self.TEST_SUBJECT_IDENTIFIER)
+        refresh_token = authorization_state.create_refresh_token(access_token.value)
+
+        assert refresh_token is None
 
     @pytest.mark.parametrize('access_token', INVALID_INPUT)
     def test_create_refresh_token_with_invalid_access_token_value(self, access_token, authorization_state):
@@ -217,7 +226,8 @@ class TestAuthorizationState(object):
         assert authorization_state.refresh_tokens[refresh_token]['exp'] == time.time() + refresh_token_lifetime
 
     def test_use_refresh_token(self, authorization_state_factory, authorization_request):
-        authorization_state = authorization_state_factory(access_token_lifetime=self.TEST_TOKEN_LIFETIME)
+        authorization_state = authorization_state_factory(access_token_lifetime=self.TEST_TOKEN_LIFETIME,
+                                                          refresh_token_lifetime=300)
         self.set_valid_subject_identifier(authorization_state)
 
         with patch('time.time', MOCK_TIME):

@@ -194,15 +194,16 @@ class AuthorizationState(object):
         if access_token_value not in self.access_tokens:
             raise InvalidAccessToken('{} unknown'.format(access_token_value))
 
-        refresh_token = rand_str()
-        authz_info = {'access_token': access_token_value}
-        if self.refresh_token_lifetime:
-            authz_info['exp'] = time.time() + self.refresh_token_lifetime
-            logger.debug('creating expiring refresh_token, valid_until=%s', authz_info['exp'])
+        if not self.refresh_token_lifetime:
+            logger.debug('no refresh token issued for for access_token=%s', access_token_value)
+            return None
 
+        refresh_token = rand_str()
+        authz_info = {'access_token': access_token_value, 'exp': time.time() + self.refresh_token_lifetime}
         self.refresh_tokens[refresh_token] = authz_info
 
-        logger.debug('issued refresh_token=%s for access_token=%s', refresh_token, access_token_value)
+        logger.debug('issued refresh_token=%s expiring=%d for access_token=%s', refresh_token, authz_info['exp'],
+                     access_token_value)
         return refresh_token
 
     def use_refresh_token(self, refresh_token, scope=None):
