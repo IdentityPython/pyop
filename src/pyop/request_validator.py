@@ -3,7 +3,8 @@ import logging
 from oic.exception import MessageException
 from oic.oic import PREFERENCE2PROVIDER
 
-from pyop.exceptions import InvalidClientRegistrationRequest, InvalidAuthenticationRequest
+from .exceptions import InvalidClientRegistrationRequest, InvalidAuthenticationRequest
+from .util import is_allowed_response_type, find_common_values
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +69,7 @@ def response_type_is_in_registered_response_types(provider, authentication_reque
         logger.error('client metadata is missing response_types')
         raise error
 
-    if frozenset(authentication_request['response_type']) not in {frozenset(rt) for rt in allowed_response_types}:
+    if not is_allowed_response_type(authentication_request['response_type'], allowed_response_types):
         raise error
 
 
@@ -122,11 +123,9 @@ def client_preferences_match_provider_capabilities(provider, registration_reques
     def match(client_preference, provider_capability):
         if isinstance(client_preference, list):
             # deal with comparing space separated values, e.g. 'response_types', without considering the order
-            client_values = [set(c.split()) for c in client_preference]
-            provider_values = [set(p.split()) for p in provider_capability]
-
             # at least one requested preference must be matched
-            return any(v in provider_values for v in client_values)
+            return len(find_common_values(client_preference, provider_capability)) > 0
+
         return client_preference in provider_capability
 
     for client_preference in registration_request.keys():

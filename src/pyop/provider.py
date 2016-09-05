@@ -9,8 +9,6 @@ from urllib.parse import urlparse
 from jwkest import jws
 from oic import rndstr
 from oic.exception import MessageException
-from oic.oauth2.message import MissingRequiredAttribute
-from oic.oauth2.message import MissingRequiredValue
 from oic.oic import PREFERENCE2PROVIDER
 from oic.oic import scope2claims
 from oic.oic.message import AccessTokenRequest
@@ -37,6 +35,7 @@ from .request_validator import registration_request_verify
 from .request_validator import requested_scope_is_supported
 from .request_validator import response_type_is_in_registered_response_types
 from .request_validator import userinfo_claims_only_specified_when_access_token_is_issued
+from .util import find_common_values
 
 logger = logging.getLogger(__name__)
 
@@ -449,12 +448,9 @@ class Provider(object):
                 continue
 
             capability = PREFERENCE2PROVIDER[pref]
-            # deal with space separated values
-            client_values = [frozenset(c.split()) for c in client_preferences[pref]]
-            provider_values = [frozenset(p.split()) for p in self.configuration_information[capability]]
-
             # only preserve the common values
-            matched_values = set(client_values).intersection(provider_values)
+            matched_values = find_common_values(client_preferences[pref], self.configuration_information[capability])
+            # deal with space separated values
             matched_prefs[pref] = [' '.join(v) for v in matched_values]
 
         return matched_prefs
@@ -483,7 +479,6 @@ class Provider(object):
         response_params = self.match_client_preferences_with_provider_capabilities(registration_req)
         response_params.update(credentials)
         self.clients[client_id] = copy.deepcopy(response_params)
-        self.clients[client_id]['response_types'] = [v.split() for v in response_params['response_types']]
 
         registration_resp = RegistrationResponse(**response_params)
         logger.debug('registration_resp=%s from registration_req', registration_resp, registration_req)

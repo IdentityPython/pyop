@@ -67,7 +67,7 @@ def inject_provider(request):
         TEST_CLIENT_ID: {
             'subject_type': 'pairwise',
             'redirect_uris': [TEST_REDIRECT_URI],
-            'response_types': [['code']],
+            'response_types': ['code'],
             'client_secret': TEST_CLIENT_SECRET,
             'token_endpoint_auth_method': 'client_secret_post'
         }
@@ -148,7 +148,7 @@ class TestProviderParseAuthenticationRequest(object):
 
     def test_include_userinfo_claims_request_with_response_type_id_token(self):
         self.authn_request_args['claims'] = ClaimsRequest(userinfo=Claims(nickname=None)).to_json()
-        self.provider.clients[TEST_CLIENT_ID]['response_types'] = [['id_token']]
+        self.provider.clients[TEST_CLIENT_ID]['response_types'] = ['id_token']
         self.authn_request_args['response_type'] = 'id_token'
         with pytest.raises(InvalidAuthenticationRequest):
             self.provider.parse_authentication_request(urlencode(self.authn_request_args))

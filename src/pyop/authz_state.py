@@ -11,6 +11,7 @@ from .exceptions import InvalidAuthorizationCode
 from .exceptions import InvalidRefreshToken
 from .exceptions import InvalidScope
 from .exceptions import InvalidSubjectIdentifier
+from .util import requested_scope_is_allowed
 
 logger = logging.getLogger(__name__)
 
@@ -223,7 +224,7 @@ class AuthorizationState(object):
         authz_info = self.access_tokens[refresh_token_info['access_token']]
 
         if scope:
-            if not frozenset(scope).issubset(frozenset(authz_info['granted_scope'].split())):
+            if not requested_scope_is_allowed(scope, authz_info['granted_scope']):
                 logger.debug('trying to refresh token with superset scope, requested_scope=%s, granted_scope=%s',
                              scope, authz_info['granted_scope'])
                 raise InvalidScope('Requested scope includes non-granted value')
