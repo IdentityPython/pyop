@@ -41,19 +41,16 @@ class TestVerifyClientAuthentication(object):
     def test_authentication_method_defaults_to_client_secret_basic(self):
         del self.clients[TEST_CLIENT_ID]['token_endpoint_auth_method']
         authz_header = self.create_basic_auth()
-        parsed_request = verify_client_authentication(self.clients, self.token_request_args, authz_header)
-        assert parsed_request == self.token_request_args
+        assert verify_client_authentication(self.clients, self.token_request_args, authz_header)
 
     def test_client_secret_post(self):
         self.clients[TEST_CLIENT_ID]['token_endpoint_auth_method'] = 'client_secret_post'
-        parsed_request = verify_client_authentication(self.clients, self.token_request_args)
-        assert parsed_request == self.token_request_args
+        assert verify_client_authentication(self.clients, self.token_request_args)
 
     def test_client_secret_basic(self):
         self.clients[TEST_CLIENT_ID]['token_endpoint_auth_method'] = 'client_secret_basic'
         authz_header = self.create_basic_auth()
-        parsed_request = verify_client_authentication(self.clients, self.token_request_args, authz_header)
-        assert parsed_request == self.token_request_args
+        assert verify_client_authentication(self.clients, self.token_request_args, authz_header)
 
     def test_unknown_client_id(self):
         self.token_request_args['client_id'] = 'unknown'
@@ -71,8 +68,7 @@ class TestVerifyClientAuthentication(object):
         self.clients[TEST_CLIENT_ID]['token_endpoint_auth_method'] = 'none'
         del self.clients[TEST_CLIENT_ID]['client_secret']
 
-        parsed_request = verify_client_authentication(self.clients, self.token_request_args, None)
-        assert parsed_request == self.token_request_args
+        assert verify_client_authentication(self.clients, self.token_request_args, None)
 
     def test_invalid_authorization_scheme(self):
         authz_header = self.create_basic_auth()

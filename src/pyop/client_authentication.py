@@ -7,7 +7,7 @@ logger = logging.getLogger(__name__)
 
 
 def verify_client_authentication(clients, parsed_request, authz_header=None):
-    # type: (Mapping[str, str], Mapping[str, Mapping[str, Any]], Optional[str]) -> None
+    # type: (Mapping[str, str], Mapping[str, Mapping[str, Any]], Optional[str]) -> bool
     """
     Verifies client authentication at the token endpoint, see
     <a href="https://tools.ietf.org/html/rfc6749#section-2.3.1">"The OAuth 2.0 Authorization Framework",
@@ -61,4 +61,4 @@ def verify_client_authentication(clients, parsed_request, authz_header=None):
         raise InvalidClientAuthentication(
             'Wrong authentication method used, MUST use \'{}\''.format(expected_authn_method))
 
-    return parsed_request
+    return True
