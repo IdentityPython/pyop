@@ -6,7 +6,7 @@ from .exceptions import InvalidClientAuthentication
 logger = logging.getLogger(__name__)
 
 
-def verify_client_authentication(parsed_request, clients, authz_header=None):
+def verify_client_authentication(clients, parsed_request, authz_header=None):
     # type: (Mapping[str, str], Mapping[str, Mapping[str, Any]], Optional[str]) -> None
     """
     Verifies client authentication at the token endpoint, see
