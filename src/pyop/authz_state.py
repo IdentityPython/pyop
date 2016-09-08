@@ -46,7 +46,7 @@ class AuthorizationState(object):
         :param access_token_lifetime: how long before access tokens should expire (in seconds),
             defaults to 1 hour
         :param refresh_token_lifetime: how long before refresh tokens should expire (in seconds),
-            defaults to never expiring
+            defaults to never issuing a refresh token if not defined
         :param refresh_token_threshold: how long before refresh token expiry time a new one should be issued (in
             seconds) in a token refresh request, defaults to never issuing a new refresh token
         """
