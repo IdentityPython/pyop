@@ -407,7 +407,10 @@ class Provider(object):
         :param request: urlencoded request (either query string or POST body)
         :param http_headers: http headers
         """
-        bearer_token = extract_bearer_token_from_http_request(request, http_headers)
+        if http_headers is None:
+            http_headers = {}
+        userinfo_request = dict(parse_qsl(request))
+        bearer_token = extract_bearer_token_from_http_request(userinfo_request, http_headers.get('Authorization'))
 
         introspection = self.authz_state.introspect_access_token(bearer_token)
         if not introspection['active']:
