@@ -12,13 +12,13 @@ from jwkest.jwk import RSAKey
 from oic import rndstr
 from oic.oauth2.message import MissingRequiredValue, MissingRequiredAttribute
 from oic.oic import PREFERENCE2PROVIDER
-from oic.oic.message import IdToken, AuthorizationRequest, ClaimsRequest, Claims
+from oic.oic.message import IdToken, AuthorizationRequest, ClaimsRequest, Claims, EndSessionRequest, EndSessionResponse
 
 from pyop.access_token import BearerTokenError
 from pyop.authz_state import AuthorizationState
 from pyop.client_authentication import InvalidClientAuthentication
 from pyop.exceptions import InvalidAuthenticationRequest, AuthorizationError, InvalidTokenRequest, \
-    InvalidClientRegistrationRequest, InvalidAccessToken
+    InvalidClientRegistrationRequest, InvalidAccessToken, InvalidAuthorizationCode, InvalidSubjectIdentifier
 from pyop.provider import Provider, redirect_uri_is_in_registered_redirect_uris, \
     response_type_is_in_registered_response_types
 from pyop.subject_identifier import HashBasedSubjectIdentifierFactory
@@ -69,7 +69,9 @@ def inject_provider(request):
             'redirect_uris': [TEST_REDIRECT_URI],
             'response_types': ['code'],
             'client_secret': TEST_CLIENT_SECRET,
-            'token_endpoint_auth_method': 'client_secret_post'
+            'token_endpoint_auth_method': 'client_secret_post',
+            'post_logout_redirect_uris': ['https://client.example.com/post_logout']
+
         }
     }
 
@@ -558,3 +560,58 @@ class TestProviderJWKS(object):
     def test_jwks(self):
         provider = Provider(rsa_key(), {'issuer': ISSUER}, None, None, None)
         assert provider.jwks == {'keys': [provider.signing_key.serialize()]}
+
+
+@pytest.mark.usefixtures('inject_provider')
+class TestRPInitiatedLogout(object):
+    def test_logout_user_with_subject_identifier(self):
+        auth_req = AuthorizationRequest(response_type='code id_token token', scope='openid', client_id='client1',
+                                        redirect_uri='https://client.example.com/redirect')
+        auth_resp = self.provider.authorize(auth_req, 'user1')
+
+        id_token = IdToken().from_jwt(auth_resp['id_token'], key=[self.provider.signing_key])
+        self.provider.logout_user(subject_identifier=id_token['sub'])
+        with pytest.raises(InvalidAccessToken):
+            self.provider.authz_state.introspect_access_token(auth_resp['access_token'])
+        with pytest.raises(InvalidAuthorizationCode):
+            self.provider.authz_state.exchange_code_for_token(auth_resp['code'])
+
+    def test_logout_user_with_id_token_hint(self):
+        auth_req = AuthorizationRequest(response_type='code id_token token', scope='openid', client_id='client1',
+                                        redirect_uri='https://client.example.com/redirect')
+        auth_resp = self.provider.authorize(auth_req, 'user1')
+
+        self.provider.logout_user(end_session_request=EndSessionRequest(id_token_hint=auth_resp['id_token']))
+        with pytest.raises(InvalidAccessToken):
+            self.provider.authz_state.introspect_access_token(auth_resp['access_token'])
+        with pytest.raises(InvalidAuthorizationCode):
+            self.provider.authz_state.exchange_code_for_token(auth_resp['code'])
+
+    def test_logout_user_with_unknown_subject_identifier(self):
+        with pytest.raises(InvalidSubjectIdentifier):
+            self.provider.logout_user(subject_identifier='unknown')
+
+    def test_post_logout_redirect(self):
+        auth_req = AuthorizationRequest(response_type='code id_token token', scope='openid', client_id='client1',
+                                        redirect_uri='https://client.example.com/redirect')
+        auth_resp = self.provider.authorize(auth_req, 'user1')
+        end_session_request = EndSessionRequest(id_token_hint=auth_resp['id_token'],
+                                                post_logout_redirect_uri='https://client.example.com/post_logout',
+                                                state='state')
+        redirect_url = self.provider.do_post_logout_redirect(end_session_request)
+        assert redirect_url == EndSessionResponse(state='state').request('https://client.example.com/post_logout')
+
+    def test_post_logout_redirect_without_post_logout_redirect_uri(self):
+        assert self.provider.do_post_logout_redirect(EndSessionRequest()) is None
+
+    def test_post_logout_redirect_with_unknown_client_for_post_logout_redirect_uri(self):
+        end_session_request = EndSessionRequest(post_logout_redirect_uri='https://client.example.com/post_logout')
+        assert self.provider.do_post_logout_redirect(end_session_request) is None
+
+    def test_post_logout_redirect_with_unknown_post_logout_redirect_uri(self):
+        auth_req = AuthorizationRequest(response_type='code id_token token', scope='openid', client_id='client1',
+                                        redirect_uri='https://client.example.com/redirect')
+        auth_resp = self.provider.authorize(auth_req, 'user1')
+        end_session_request = EndSessionRequest(id_token_hint=auth_resp['id_token'],
+                                                post_logout_redirect_uri='https://client.example.com/unknown')
+        assert self.provider.do_post_logout_redirect(end_session_request) is None

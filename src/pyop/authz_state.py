@@ -335,3 +335,13 @@ class AuthorizationState(object):
             raise InvalidAuthorizationCode('{} unknown'.format(authorization_code))
 
         return self.authorization_codes[authorization_code]['sub']
+
+    def delete_state_for_subject_identifier(self, subject_identifier):
+        # type (str) -> None
+        if not self._is_valid_subject_identifier(subject_identifier):
+            raise InvalidSubjectIdentifier('Trying to delete state for unknown subject identifier')
+
+        for tokens in [self.authorization_codes, self.access_tokens]:
+            tokens_to_remove = [k for k, v in tokens.items() if v['sub'] == subject_identifier]
+            for ac in tokens_to_remove:
+                tokens.pop(ac, None)

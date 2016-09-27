@@ -243,6 +243,29 @@ def request_contains_software_statement(registration_request):
 provider.registration_request_validators.append(request_contains_software_statement)
 ```
 
+# User logout
+
+RP-initiated logout, as described in [Section 5 of OpenID Connect Session Management](http://openid.net/specs/openid-connect-session-1_0.html#RPLogout)
+is supported. The parsed request should be passed to `Provider.logout_user` together with any known subject identifier
+for the user, and then `Provider.do_post_logout_redirect` should be called do obey any valid `post_logout_redirect_uri`
+included in the request.
+
+```python
+def end_session_endpoint(request):
+    end_session_request = EndSessionRequest().deserialize(request.get_data().decode('utf-8'))
+    
+    try:
+        provider.logout_user(session.get('sub'), end_session_request)
+    except InvalidSubjectIdentifier as e:
+        return HTTPResponse('Logout unsuccessful!', content-type='text/html', status=400)
+        
+    redirect_url = provider.do_post_logout_redirect(end_session_request)
+    if redirect_url:
+        return HTTPResponse(redirect_url, status=303)
+
+    return HTTPResponse('Logout successful!', content-type='text/html')
+```
+
 # Exceptions
 All exceptions, except `AuthorizationError`, inherits from `ValueError`. However it might be necessary to distinguish
 between them to send the correct error message back to the client according to the OpenID Connect specifications.

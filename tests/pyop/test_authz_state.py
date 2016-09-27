@@ -413,3 +413,21 @@ class TestAuthorizationState(object):
         authz_code = authorization_state.create_authorization_code(authorization_request, self.TEST_SUBJECT_IDENTIFIER)
         sub = authorization_state.get_subject_identifier_for_code(authz_code)
         assert sub == self.TEST_SUBJECT_IDENTIFIER
+
+    def test_remove_state_for_subject_identifier(self, authorization_state, authorization_request):
+        self.set_valid_subject_identifier(authorization_state)
+        authz_code1 = authorization_state.create_authorization_code(authorization_request, self.TEST_SUBJECT_IDENTIFIER)
+        authz_code2 = authorization_state.create_authorization_code(authorization_request, self.TEST_SUBJECT_IDENTIFIER)
+        access_token1 = authorization_state.create_access_token(authorization_request, self.TEST_SUBJECT_IDENTIFIER)
+        access_token2 = authorization_state.create_access_token(authorization_request, self.TEST_SUBJECT_IDENTIFIER)
+
+        authorization_state.delete_state_for_subject_identifier(self.TEST_SUBJECT_IDENTIFIER)
+
+        for ac in [authz_code1, authz_code2]:
+            assert ac not in authorization_state.authorization_codes
+        for at in [access_token1, access_token2]:
+            assert at.value not in authorization_state.access_tokens
+
+    def test_remove_state_for_unknown_subject_identifier(self, authorization_state):
+        with pytest.raises(InvalidSubjectIdentifier):
+            authorization_state.delete_state_for_subject_identifier('unknown')
