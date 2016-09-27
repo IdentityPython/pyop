@@ -15,6 +15,8 @@ from oic.oic.message import AccessTokenRequest
 from oic.oic.message import AccessTokenResponse
 from oic.oic.message import AuthorizationRequest
 from oic.oic.message import AuthorizationResponse
+from oic.oic.message import EndSessionRequest
+from oic.oic.message import EndSessionResponse
 from oic.oic.message import IdToken
 from oic.oic.message import OpenIDSchema
 from oic.oic.message import ProviderConfigurationResponse
@@ -486,3 +488,36 @@ class Provider(object):
         registration_resp = RegistrationResponse(**response_params)
         logger.debug('registration_resp=%s from registration_req', registration_resp, registration_req)
         return registration_resp
+
+    def logout_user(self, subject_identifier=None, end_session_request=None):
+        # type: (Optional[str], Optional[oic.oic.message.EndSessionRequest]) -> None
+        if not end_session_request:
+            end_session_request = EndSessionRequest()
+        if 'id_token_hint' in end_session_request:
+            id_token = IdToken().from_jwt(end_session_request['id_token_hint'], key=[self.signing_key])
+            subject_identifier = id_token['sub']
+
+        self.authz_state.delete_state_for_subject_identifier(subject_identifier)
+
+    def do_post_logout_redirect(self, end_session_request):
+        # type: (oic.oic.message.EndSessionRequest) -> oic.oic.message.EndSessionResponse
+        if 'post_logout_redirect_uri' not in end_session_request:
+            return None
+
+        client_id = None
+        if 'id_token_hint' in end_session_request:
+            id_token = IdToken().from_jwt(end_session_request['id_token_hint'], key=[self.signing_key])
+            client_id = id_token['aud'][0]
+
+        if 'post_logout_redirect_uri' in end_session_request:
+            if not client_id:
+                return None
+            if not end_session_request['post_logout_redirect_uri'] in self.clients[client_id].get(
+                    'post_logout_redirect_uris', []):
+                return None
+
+        end_session_response = EndSessionResponse()
+        if 'state' in end_session_request:
+            end_session_response['state'] = end_session_request['state']
+
+        return end_session_response.request(end_session_request['post_logout_redirect_uri'])
