@@ -108,7 +108,7 @@ The following example illustrates the high-level idea:
 ```python
 @app.route('/.well-known/openid-configuration')
 def provider_config():
-    return HTTPResponse(provider.provider_configuration.to_json(), content-type="application/json")
+    return HTTPResponse(provider.provider_configuration.to_json(), content_type="application/json")
 ```
 
 # Authorization endpoint
@@ -176,20 +176,25 @@ An incoming token request is processed by `Provider.handle_token_request`. It wi
 necessary tokens (access token and possibly refresh token)
 
 ```python
-@ap.route('/token', methods=['POST', 'GET'])
+from oic.oic.message import TokenErrorResponse
+
+from pyop.exceptions import InvalidClientAuthentication
+from pyop.exceptions import OAuthError
+
+@app.route('/token', methods=['POST', 'GET'])
 def token_endpoint(request):
     try:
         token_response = provider.handle_token_request(request.get_data().decode('utf-8'),
                                                        request.headers)
-        return HTTPResponse(token_response.to_json(), content-type='application/json')
+        return HTTPResponse(token_response.to_json(), content_type='application/json')
     except InvalidClientAuthentication as e:
         error_resp = TokenErrorResponse(error='invalid_client', error_description=str(e))
-        http_response = HTTPResponse(error_resp.to_json(), status=401, content-type='application/json')
+        http_response = HTTPResponse(error_resp.to_json(), status=401, content_type='application/json')
         http_response.headers['WWW-Authenticate'] = 'Basic'
         return http_response
     except OAuthError as e:
         error_resp = TokenErrorResponse(error=e.oauth_error, error_description=str(e))
-        return HTTPResponse(error_resp.to_json(), status=400, content-type='application/json')
+        return HTTPResponse(error_resp.to_json(), status=400, content_type='application/json')
 ```
 
 
@@ -198,15 +203,21 @@ An incoming userinfo request is processed by `Provider.handle_userinfo_request`.
 all requested userinfo. 
 
 ```python
-@app.route('/userinfo', methods=['GET', 'POST])
+from oic.oic.message import UserInfoErrorResponse
+
+from pyop.access_token import AccessToken
+from pyop.exceptions import BearerTokenError
+from pyop.exceptions import InvalidAccessToken
+
+@app.route('/userinfo', methods=['GET', 'POST'])
 def userinfo_endpoint(request):
     try:
         response = provider.handle_userinfo_request(request.get_data().decode('utf-8'),
                                                     request.headers)
-        return HTTPResponse(response.to_json(), content-type='application/json')
+        return HTTPResponse(response.to_json(), content_type='application/json')
     except (BearerTokenError, InvalidAccessToken) as e:
         error_resp = UserInfoErrorResponse(error='invalid_token', error_description=str(e))
-        http_response = HTTPResponse(error_resp.to_json(), status=401, content-type='application/json')
+        http_response = HTTPResponse(error_resp.to_json(), status=401, content_type='application/json')
         http_response.headers['WWW-Authenticate'] = AccessToken.BEARER_TOKEN_TYPE
         return http_response
 ```
@@ -218,12 +229,15 @@ An incoming client registration request is process by `Provider.handle_userinfo_
 store the registered metadata and issue new client credentials.
 
 ```python
+from pyop.exceptions import InvalidClientRegistrationRequest
+
+@app.route('/registration', methods=['POST'])
 def registration_endpoint(request):
     try:
-        response = handle_client_registration_request(request.get_data().decode('utf-8'))
-        return HTTPResponse(response.to_json(), status=201, content-type='application/json')
+        response = provider.handle_client_registration_request(request.get_data().decode('utf-8'))
+        return HTTPResponse(response.to_json(), status=201, content_type='application/json')
     except InvalidClientRegistrationRequest as e:
-        return HTTPResponse(e.to_json(), status=400, content-type='application/json')
+        return HTTPResponse(e.to_json(), status=400, content_type='application/json')
 ```
 
 ## Registration request validation
@@ -237,8 +251,8 @@ is added:
 ```python
 def request_contains_software_statement(registration_request):
     if 'software_statement' not in registration_request:
-        raise InvalidRegistrationRequest('The request does not contain a software_statement', registration_request,
-                                         oauth_error='invalid_request')
+        raise InvalidClientRegistrationRequest('The request does not contain a software_statement', registration_request,
+                                               oauth_error='invalid_request')
 
 provider.registration_request_validators.append(request_contains_software_statement)
 ```
@@ -251,19 +265,25 @@ for the user, and then `Provider.do_post_logout_redirect` should be called do ob
 included in the request.
 
 ```python
+from oic.oic.message import EndSessionRequest
+
+from pyop.exceptions import InvalidSubjectIdentifier
+
+@app.route('/logout')
 def end_session_endpoint(request):
     end_session_request = EndSessionRequest().deserialize(request.get_data().decode('utf-8'))
     
     try:
         provider.logout_user(session.get('sub'), end_session_request)
     except InvalidSubjectIdentifier as e:
-        return HTTPResponse('Logout unsuccessful!', content-type='text/html', status=400)
+        return HTTPResponse('Logout unsuccessful!', content_type='text/html', status=400)
         
+    # TODO automagic logout, should ask user first!
     redirect_url = provider.do_post_logout_redirect(end_session_request)
     if redirect_url:
         return HTTPResponse(redirect_url, status=303)
 
-    return HTTPResponse('Logout successful!', content-type='text/html')
+    return HTTPResponse('Logout successful!', content_type='text/html')
 ```
 
 # Exceptions
