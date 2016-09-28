@@ -7,6 +7,7 @@ Uses [pyoidc](https://github.com/rohe/pyoidc/) and
 # Provider implementations using pyOP
 * [se-leg-op](https://github.com/SUNET/se-leg-op)
 * [SATOSA OIDC frontend](https://github.com/its-dirg/SATOSA/blob/master/src/satosa/frontends/openid_connect.py)
+* [local example](example/views.py)
 
 # Introduction
 
