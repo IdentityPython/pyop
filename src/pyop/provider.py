@@ -426,7 +426,7 @@ class Provider(object):
         user_claims = self.userinfo.get_claims_for(user_id, requested_claims)
 
         response = OpenIDSchema(sub=introspection['sub'], **user_claims)
-        logger.debug('userinfo=%s from requested_claims=%s userinfo=%s extra_claims=%s',
+        logger.debug('userinfo=%s from requested_claims=%s userinfo=%s',
                      response, requested_claims, user_claims)
         return response
 
@@ -486,7 +486,7 @@ class Provider(object):
         self.clients[client_id] = copy.deepcopy(response_params)
 
         registration_resp = RegistrationResponse(**response_params)
-        logger.debug('registration_resp=%s from registration_req', registration_resp, registration_req)
+        logger.debug('registration_resp=%s from registration_req=%s', registration_resp, registration_req)
         return registration_resp
 
     def logout_user(self, subject_identifier=None, end_session_request=None):
