@@ -11,7 +11,7 @@ setup(
     author_email='rebecka.gulliksson@umu.se',
     description='OpenID Connect Provider (OP) library in Python.',
     install_requires=[
-        'oic >= 0.8.5.0',
+        'oic==0.9.0.0',
         'pymongo'
     ]
 )
