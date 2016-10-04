@@ -6,7 +6,7 @@ from unittest.mock import Mock, patch
 from urllib.parse import urlencode
 
 import pytest
-from Crypto.PublicKey import RSA
+from Cryptodome.PublicKey import RSA
 from jwkest import jws
 from jwkest.jwk import RSAKey
 from oic import rndstr
