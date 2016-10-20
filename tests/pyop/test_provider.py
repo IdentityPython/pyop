@@ -184,6 +184,15 @@ class TestProviderAuthorize(object):
         assert resp['code'] in self.provider.authz_state.authorization_codes
         assert resp['state'] == self.authn_request_args['state']
 
+    def test_authorize_with_custom_sub(self, monkeypatch):
+        sub = 'test_sub1'
+        monkeypatch.setitem(self.provider.userinfo._db[TEST_USER_ID], 'sub', sub)
+        auth_req = AuthorizationRequest().from_dict(self.authn_request_args)
+        resp = self.provider.authorize(auth_req, TEST_USER_ID)
+        assert resp['code'] in self.provider.authz_state.authorization_codes
+        assert resp['state'] == self.authn_request_args['state']
+        assert self.provider.authz_state.authorization_codes[resp['code']]['sub'] == sub
+
     @patch('time.time', MOCK_TIME)
     @pytest.mark.parametrize('extra_claims', [
         {'foo': 'bar'},
@@ -426,6 +435,15 @@ class TestProviderHandleUserinfoRequest(object):
         del response['sub']
         assert response.to_dict() == self.provider.userinfo[TEST_USER_ID]
         assert self.provider.authz_state.get_user_id_for_subject_identifier(response_sub) == TEST_USER_ID
+
+    def test_handle_userinfo_with_custom_sub(self, monkeypatch):
+        sub = 'test_sub1'
+        monkeypatch.setitem(self.provider.userinfo._db[TEST_USER_ID], 'sub', sub)
+        claims_request = ClaimsRequest(userinfo=Claims(email=None))
+        access_token = self.create_access_token({'scope': 'openid profile', 'claims': claims_request})
+        response = self.provider.handle_userinfo_request(urlencode({'access_token': access_token}))
+
+        assert response['sub'] == sub
 
     def test_handle_userinfo_rejects_request_missing_access_token(self):
         with pytest.raises(BearerTokenError) as exc:

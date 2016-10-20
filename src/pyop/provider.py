@@ -133,8 +133,14 @@ class Provider(object):
         Creates an Authentication Response for the specified authentication request and local identifier of the
         authenticated user.
         """
-        sub = self._create_subject_identifier(user_id, authentication_request['client_id'],
-                                              authentication_request['redirect_uri'])
+        custom_sub = self.userinfo[user_id].get('sub')
+        if custom_sub:
+            self.authz_state.subject_identifiers[user_id] = {'public': custom_sub}
+            sub = custom_sub
+        else:
+            sub = self._create_subject_identifier(user_id, authentication_request['client_id'],
+                                                  authentication_request['redirect_uri'])
+
         self._check_subject_identifier_matches_requested(authentication_request, sub)
         response = AuthorizationResponse()
 
@@ -425,7 +431,8 @@ class Provider(object):
         requested_claims.update(self._get_requested_claims_in(authentication_request, 'userinfo'))
         user_claims = self.userinfo.get_claims_for(user_id, requested_claims)
 
-        response = OpenIDSchema(sub=introspection['sub'], **user_claims)
+        user_claims.setdefault('sub', introspection['sub'])
+        response = OpenIDSchema(**user_claims)
         logger.debug('userinfo=%s from requested_claims=%s userinfo=%s',
                      response, requested_claims, user_claims)
         return response
