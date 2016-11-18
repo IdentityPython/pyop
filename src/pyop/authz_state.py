@@ -228,7 +228,7 @@ class AuthorizationState(object):
                 logger.debug('trying to refresh token with superset scope, requested_scope=%s, granted_scope=%s',
                              scope, authz_info['granted_scope'])
                 raise InvalidScope('Requested scope includes non-granted value')
-            scope = ''.join(scope)
+            scope = ' '.join(scope)
             logger.debug('refreshing token with new scope, old_scope=%s -> new_scope=%s', authz_info['scope'], scope)
         else:
             # OAuth 2.0: scope: "[...] if omitted is treated as equal to the scope originally granted by the resource owner"
