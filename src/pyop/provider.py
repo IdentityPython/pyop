@@ -29,6 +29,7 @@ from .client_authentication import verify_client_authentication
 from .exceptions import AuthorizationError
 from .exceptions import InvalidAccessToken
 from .exceptions import InvalidTokenRequest
+from .exceptions import InvalidAuthorizationCode
 from .request_validator import authorization_request_verify
 from .request_validator import client_id_is_known
 from .request_validator import client_preferences_match_provider_capabilities
@@ -339,7 +340,9 @@ class Provider(object):
             raise InvalidTokenRequest(str(e), token_request) from e
 
         authentication_request = self.authz_state.get_authorization_request_for_code(token_request['code'])
-
+        
+        if token_request['client_id'] != authentication_request['client_id']:
+            raise InvalidAuthorizationCode('{} unknown'.format(token_request['code']))
         if token_request['redirect_uri'] != authentication_request['redirect_uri']:
             raise InvalidTokenRequest('Invalid redirect_uri: {} != {}'.format(token_request['redirect_uri'],
                                                                               authentication_request['redirect_uri']),
@@ -405,7 +408,8 @@ class Provider(object):
         if http_headers is None:
             http_headers = {}
         token_request = dict(parse_qsl(request_body))
-        verify_client_authentication(self.clients, token_request, http_headers.get('Authorization'))
+        client_id = verify_client_authentication(self.clients, token_request, http_headers.get('Authorization'))
+        token_request['client_id'] = client_id
         return token_request
 
     def handle_userinfo_request(self, request=None, http_headers=None):

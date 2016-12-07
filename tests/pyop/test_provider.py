@@ -26,6 +26,8 @@ from pyop.userinfo import Userinfo
 
 TEST_CLIENT_ID = 'client1'
 TEST_CLIENT_SECRET = 'secret'
+INVALID_TEST_CLIENT_ID = 'invalid_client'
+INVALID_TEST_CLIENT_SECRET = 'invalid_secret'
 TEST_REDIRECT_URI = 'https://client.example.com'
 ISSUER = 'https://provider.example.com'
 TEST_USER_ID = 'user1'
@@ -71,7 +73,14 @@ def inject_provider(request):
             'client_secret': TEST_CLIENT_SECRET,
             'token_endpoint_auth_method': 'client_secret_post',
             'post_logout_redirect_uris': ['https://client.example.com/post_logout']
-
+        },
+        INVALID_TEST_CLIENT_ID: {
+            'subject_type': 'pairwise',
+            'redirect_uris': 'http://invalid.redirect.loc',
+            'response_types': ['code'],
+            'client_secret': INVALID_TEST_CLIENT_SECRET,
+            'token_endpoint_auth_method': 'client_secret_post',
+            'post_logout_redirect_uris': ['https://client.example.com/post_logout']
         }
     }
 
@@ -336,6 +345,13 @@ class TestProviderHandleTokenRequest(object):
         with pytest.raises(InvalidClientAuthentication):
             self.provider.handle_token_request(urlencode(self.authorization_code_exchange_request_args),
                                                extra_id_token_claims={'foo': 'bar'})
+
+    def test_handle_token_request_reject_code_not_issued_to_client(self):
+        self.authorization_code_exchange_request_args['client_id'] = INVALID_TEST_CLIENT_ID
+        self.authorization_code_exchange_request_args['client_secret'] = INVALID_TEST_CLIENT_SECRET
+        self.authorization_code_exchange_request_args['code'] = self.create_authz_code()
+        with pytest.raises(InvalidAuthorizationCode):
+            self.provider.handle_token_request(urlencode(self.authorization_code_exchange_request_args))
 
     def test_handle_token_request_reject_invalid_redirect_uri_in_exchange_request(self):
         self.authorization_code_exchange_request_args['redirect_uri'] = 'https://invalid.com'
