@@ -410,8 +410,7 @@ class Provider(object):
         if http_headers is None:
             http_headers = {}
         token_request = dict(parse_qsl(request_body))
-        client_id = verify_client_authentication(self.clients, token_request, http_headers.get('Authorization'))
-        token_request['client_id'] = client_id
+        token_request['client_id']  = verify_client_authentication(self.clients, token_request, http_headers.get('Authorization'))
         return token_request
 
     def handle_userinfo_request(self, request=None, http_headers=None):
