@@ -342,6 +342,8 @@ class Provider(object):
         authentication_request = self.authz_state.get_authorization_request_for_code(token_request['code'])
         
         if token_request['client_id'] != authentication_request['client_id']:
+            logger.info('Authorization code \'%s\' belonging to \'%s\' was used by \'%s\'',
+                        token_request['code'], authentication_request['client_id'], token_request['client_id'])
             raise InvalidAuthorizationCode('{} unknown'.format(token_request['code']))
         if token_request['redirect_uri'] != authentication_request['redirect_uri']:
             raise InvalidTokenRequest('Invalid redirect_uri: {} != {}'.format(token_request['redirect_uri'],
