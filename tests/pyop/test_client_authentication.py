@@ -41,21 +41,21 @@ class TestVerifyClientAuthentication(object):
     def test_authentication_method_defaults_to_client_secret_basic(self):
         del self.clients[TEST_CLIENT_ID]['token_endpoint_auth_method']
         authz_header = self.create_basic_auth()
-        assert verify_client_authentication(self.clients, self.token_request_args, authz_header)
+        assert verify_client_authentication(self.clients, self.token_request_args, authz_header) == TEST_CLIENT_ID
 
     def test_client_secret_post(self):
         self.clients[TEST_CLIENT_ID]['token_endpoint_auth_method'] = 'client_secret_post'
-        assert verify_client_authentication(self.clients, self.token_request_args)
+        assert verify_client_authentication(self.clients, self.token_request_args) == TEST_CLIENT_ID
 
     def test_client_secret_basic(self):
         self.clients[TEST_CLIENT_ID]['token_endpoint_auth_method'] = 'client_secret_basic'
         authz_header = self.create_basic_auth()
-        assert verify_client_authentication(self.clients, self.token_request_args, authz_header)
+        assert verify_client_authentication(self.clients, self.token_request_args, authz_header) == TEST_CLIENT_ID
 
     def test_unknown_client_id(self):
         self.token_request_args['client_id'] = 'unknown'
         with pytest.raises(InvalidClientAuthentication):
-            verify_client_authentication(self.clients, self.token_request_args)
+            verify_client_authentication(self.clients, self.token_request_args) == TEST_CLIENT_ID
 
     def test_wrong_client_secret(self):
         self.token_request_args['client_secret'] = 'foobar'
@@ -68,7 +68,7 @@ class TestVerifyClientAuthentication(object):
         self.clients[TEST_CLIENT_ID]['token_endpoint_auth_method'] = 'none'
         del self.clients[TEST_CLIENT_ID]['client_secret']
 
-        assert verify_client_authentication(self.clients, self.token_request_args, None)
+        assert verify_client_authentication(self.clients, self.token_request_args, None) == TEST_CLIENT_ID
 
     def test_invalid_authorization_scheme(self):
         authz_header = self.create_basic_auth()

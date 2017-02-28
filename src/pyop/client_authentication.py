@@ -61,4 +61,4 @@ def verify_client_authentication(clients, parsed_request, authz_header=None):
         raise InvalidClientAuthentication(
             'Wrong authentication method used, MUST use \'{}\''.format(expected_authn_method))
 
-    return True
+    return client_id
