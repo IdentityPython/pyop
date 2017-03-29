@@ -1,4 +1,7 @@
 # pyOP
+[![Build Status](https://travis-ci.org/SUNET/pyop.svg)](https://travis-ci.org/SUNET/pyop)
+[![PyPI](https://img.shields.io/pypi/v/pyop.svg)](https://pypi.python.org/pypi/pyop)
+
 
 OpenID Connect Provider (OP) library in Python.
 Uses [pyoidc](https://github.com/rohe/pyoidc/) and
