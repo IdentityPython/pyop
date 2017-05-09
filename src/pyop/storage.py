@@ -66,14 +66,14 @@ class MongoDB(object):
         if 'replicaSet' in kwargs and kwargs['replicaSet'] is None:
             del kwargs['replicaSet']
 
-        _options = self._parsed_uri.get('options')
+        self._options = self._parsed_uri.get('options')
         if connection_factory is None:
             connection_factory = pymongo.MongoClient
         if 'replicaSet' in kwargs:
             connection_factory = pymongo.MongoReplicaSetClient
-        if 'replicaSet' in _options and _options['replicaSet'] is not None:
+        if 'replicaSet' in _options and self._options['replicaSet'] is not None:
             connection_factory = pymongo.MongoReplicaSetClient
-            kwargs['replicaSet'] = _options['replicaSet']
+            kwargs['replicaSet'] = self._options['replicaSet']
 
         if 'replicaSet' in kwargs:
             if 'socketTimeoutMS' not in kwargs:
@@ -138,10 +138,17 @@ class MongoDB(object):
         if username and password:
             db.authenticate(username, password)
         elif self._parsed_uri.get("username", None):
-            db.authenticate(
-                self._parsed_uri.get("username", None),
-                self._parsed_uri.get("password", None)
-            )
+            if 'authSource' in self._options and self._options['authSource'] is not None:
+                db.authenticate(
+                    self._parsed_uri.get("username", None),
+                    self._parsed_uri.get("password", None),
+                    source=self._options['authSource']
+                )
+            else:
+                db.authenticate(
+                    self._parsed_uri.get("username", None),
+                    self._parsed_uri.get("password", None)
+                )
         return db
 
     def get_collection(self, collection, database_name=None, username=None, password=None):
