@@ -2,6 +2,7 @@
 
 import copy
 import pymongo
+from time import time
 
 
 class MongoWrapper(object):
@@ -15,7 +16,8 @@ class MongoWrapper(object):
     def __setitem__(self, key, value):
         doc = {
             'lookup_key': key,
-            'data': value
+            'data': value,
+            'modified_ts': time()
         }
         self._coll.update({'lookup_key': key}, doc, upsert=True)
 
