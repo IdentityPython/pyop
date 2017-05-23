@@ -71,7 +71,7 @@ class MongoDB(object):
             connection_factory = pymongo.MongoClient
         if 'replicaSet' in kwargs:
             connection_factory = pymongo.MongoReplicaSetClient
-        if 'replicaSet' in _options and self._options['replicaSet'] is not None:
+        if 'replicaSet' in self._options and self._options['replicaSet'] is not None:
             connection_factory = pymongo.MongoReplicaSetClient
             kwargs['replicaSet'] = self._options['replicaSet']
 
