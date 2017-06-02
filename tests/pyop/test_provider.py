@@ -122,13 +122,6 @@ class TestProviderParseAuthenticationRequest(object):
             self.provider.parse_authentication_request(urlencode(self.authn_request_args))
         assert isinstance(exc.value.__cause__, MissingRequiredValue)
 
-    def test_reject_request_with_unknown_scope(self):
-        self.authn_request_args['scope'] = 'openid unknown'
-
-        with pytest.raises(InvalidAuthenticationRequest) as exc:
-            self.provider.parse_authentication_request(urlencode(self.authn_request_args))
-        assert exc.value.oauth_error == 'invalid_scope'
-
     def test_custom_validation_hook_reject(self):
         class TestException(Exception):
             pass
