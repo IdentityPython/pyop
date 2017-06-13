@@ -96,9 +96,8 @@ def requested_scope_is_supported(provider, authentication_request):
     supported_scopes = set(provider.provider_configuration['scopes_supported'])
     requested_unsupported_scopes = requested_scopes - supported_scopes
     if requested_unsupported_scopes:
-        raise InvalidAuthenticationRequest('Request contains unsupported/unknown scopes: {}'
-                                           .format(', '.join(requested_unsupported_scopes)),
-                                           authentication_request, oauth_error='invalid_scope')
+        logger.warning('Request contains unsupported/unknown scopes: {}'
+                                           .format(', '.join(requested_unsupported_scopes)))
 
 
 def registration_request_verify(registration_request):
