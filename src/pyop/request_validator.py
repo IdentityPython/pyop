@@ -29,10 +29,10 @@ def client_id_is_known(provider, authentication_request):
     :raise InvalidAuthenticationRequest: if the client_id is unknown
     """
     if authentication_request['client_id'] not in provider.clients:
-        raise InvalidAuthenticationRequest('Unknown client_id \'{}\''.format(authentication_request['client_id']),
+        logger.error('Unknown client_id \'{}\''.format(authentication_request['client_id']))
+        raise InvalidAuthenticationRequest('Unknown client_id',
                                            authentication_request,
                                            oauth_error='unauthorized_client')
-
 
 def redirect_uri_is_in_registered_redirect_uris(provider, authentication_request):
     """
@@ -41,8 +41,9 @@ def redirect_uri_is_in_registered_redirect_uris(provider, authentication_request
     :param authentication_request: authentication request to verify
     :raise InvalidAuthenticationRequest: if the redirect uri is not registered
     """
-    error = InvalidAuthenticationRequest('Redirect uri \'{}\' is not registered'.format(
-        authentication_request['redirect_uri']), authentication_request)
+    error = InvalidAuthenticationRequest('Redirect uri is not registered',
+                                         authentication_request,
+                                         oauth_error="invalid_request")
     try:
         allowed_redirect_uris = provider.clients[authentication_request['client_id']]['redirect_uris']
     except KeyError as e:
@@ -50,6 +51,7 @@ def redirect_uri_is_in_registered_redirect_uris(provider, authentication_request
         raise error
 
     if authentication_request['redirect_uri'] not in allowed_redirect_uris:
+        logger.error("Redirect uri \'{0}\' is not registered for this client".format(authentication_request['redirect_uri']))
         raise error
 
 
@@ -60,9 +62,9 @@ def response_type_is_in_registered_response_types(provider, authentication_reque
     :param authentication_request: authentication request to verify
     :raise InvalidAuthenticationRequest: if the response type is not allowed
     """
-    error = InvalidAuthenticationRequest('Response type \'{}\' is not registered'.format(
-        ' '.join(authentication_request['response_type'])),
-        authentication_request, oauth_error='invalid_request')
+    error = InvalidAuthenticationRequest('Response type is not registered',
+                                         authentication_request, 
+                                         oauth_error='invalid_request')
     try:
         allowed_response_types = provider.clients[authentication_request['client_id']]['response_types']
     except KeyError as e:
@@ -70,6 +72,7 @@ def response_type_is_in_registered_response_types(provider, authentication_reque
         raise error
 
     if not is_allowed_response_type(authentication_request['response_type'], allowed_response_types):
+        logger.error('Response type \'{}\' is not registered'.format(' '.join(authentication_request['response_type'])))
         raise error
 
 
