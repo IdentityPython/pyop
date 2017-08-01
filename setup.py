@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='pyop',
-    version='2.0.5',
+    version='2.0.6',
     packages=find_packages('src'),
     package_dir={'': 'src'},
     url='https://github.com/its-dirg/pyop',
