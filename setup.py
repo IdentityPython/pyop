@@ -5,13 +5,13 @@ setup(
     version='2.0.6',
     packages=find_packages('src'),
     package_dir={'': 'src'},
-    url='https://github.com/its-dirg/pyop',
+    url='https://github.com/SUNET/pyop',
     license='Apache 2.0',
     author='Rebecka Gulliksson',
-    author_email='rebecka.gulliksson@umu.se',
+    author_email='satosa-dev@lists.sunet.se',
     description='OpenID Connect Provider (OP) library in Python.',
     install_requires=[
-        'oic==0.9.0.0',
+        'oic<0.12',
         'pymongo'
     ]
 )

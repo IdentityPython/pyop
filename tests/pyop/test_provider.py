@@ -39,6 +39,16 @@ def rsa_key():
     return RSAKey(key=RSA.generate(1024), use="sig", alg="RS256", kid=rndstr(4))
 
 
+def provide_configuration():
+    conf = {
+        'issuer': ISSUER,
+        'jwks_uri': '/jwks',
+        'authorization_endpoint': '/authorization',
+        'token_endpoint': '/token'
+    }
+    return conf
+
+
 def assert_id_token_base_claims(jws, verification_key, provider, auth_req):
     id_token = IdToken().from_jwt(jws, key=[verification_key])
     assert id_token['nonce'] == auth_req['nonce']
@@ -94,7 +104,7 @@ def inject_provider(request):
             'email': 'testster@example.com',
         }
     })
-    request.instance.provider = Provider(rsa_key(), {'issuer': ISSUER},
+    request.instance.provider = Provider(rsa_key(), provide_configuration(),
                                          AuthorizationState(HashBasedSubjectIdentifierFactory('salt')),
                                          clients, userinfo)
 
@@ -517,7 +527,7 @@ class TestProviderHandleRegistrationRequest(object):
     ])
     def test_rejects_mismatching_request(self, client_preference, provider_capability, client_value, provider_value):
         request = {'redirect_uris': ['https://client.example.com/redirect']}
-        provider_capabilities = {'issuer': ISSUER}
+        provider_capabilities = provide_configuration()
 
         if client_preference.startswith(('request_object_encryption', 'id_token_encrypted', 'userinfo_encrypted')):
             # provide default value for the metadata params that come in pairs
@@ -545,7 +555,8 @@ class TestProviderHandleRegistrationRequest(object):
     ])
     def test_matches_common_set_of_metadata_values(self, client_preference, provider_capability,
                                                    client_value, provider_value):
-        provider_capabilities = {'issuer': ISSUER, provider_capability: provider_value}
+        provider_capabilities = provide_configuration()
+        provider_capabilities.update({provider_capability: provider_value})
         provider = Provider(rsa_key(), provider_capabilities,
                             AuthorizationState(HashBasedSubjectIdentifierFactory('salt')), {}, None)
         request = {'redirect_uris': ['https://client.example.com/redirect'], client_preference: client_value}
@@ -577,7 +588,8 @@ class TestProviderHandleRegistrationRequest(object):
 
 class TestProviderProviderConfiguration(object):
     def test_provider_configuration(self):
-        config = {'issuer': ISSUER, 'foo': 'bar', 'abc': 'xyz'}
+        config = provide_configuration()
+        config.update({'foo': 'bar', 'abc': 'xyz'})
         provider = Provider(None, config, None, None, None)
         provider_config = provider.provider_configuration
         assert all(k in provider_config for k in config)
@@ -585,7 +597,7 @@ class TestProviderProviderConfiguration(object):
 
 class TestProviderJWKS(object):
     def test_jwks(self):
-        provider = Provider(rsa_key(), {'issuer': ISSUER}, None, None, None)
+        provider = Provider(rsa_key(), provide_configuration(), None, None, None)
         assert provider.jwks == {'keys': [provider.signing_key.serialize()]}
 
 
