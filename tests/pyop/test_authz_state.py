@@ -65,7 +65,7 @@ class TestAuthorizationState(object):
 
         authz_code = authorization_state.create_authorization_code(authorization_request, self.TEST_SUBJECT_IDENTIFIER)
         assert authz_code in authorization_state.authorization_codes
-        assert authorization_state.authorization_codes[authz_code]['exp'] == time.time() + code_lifetime
+        assert authorization_state.authorization_codes[authz_code]['exp'] == int(time.time()) + code_lifetime
         assert authorization_state.authorization_codes[authz_code]['used'] is False
         assert authorization_state.authorization_codes[authz_code][AuthorizationState.KEY_AUTHORIZATION_REQUEST] == \
                authorization_request.to_dict()
@@ -223,7 +223,7 @@ class TestAuthorizationState(object):
 
         assert refresh_token in authorization_state.refresh_tokens
         assert authorization_state.refresh_tokens[refresh_token]['access_token'] == access_token.value
-        assert authorization_state.refresh_tokens[refresh_token]['exp'] == time.time() + refresh_token_lifetime
+        assert authorization_state.refresh_tokens[refresh_token]['exp'] == int(time.time()) + refresh_token_lifetime
 
     def test_use_refresh_token(self, authorization_state_factory, authorization_request):
         authorization_state = authorization_state_factory(access_token_lifetime=self.TEST_TOKEN_LIFETIME,
@@ -267,7 +267,7 @@ class TestAuthorizationState(object):
         old_access_token = authorization_state.create_access_token(authorization_request, self.TEST_SUBJECT_IDENTIFIER)
         refresh_token = authorization_state.create_refresh_token(old_access_token.value)
 
-        close_to_expiration = time.time() + authorization_state.refresh_token_lifetime - 50
+        close_to_expiration = int(time.time()) + authorization_state.refresh_token_lifetime - 50
         with patch('time.time', Mock(return_value=close_to_expiration)):
             new_access_token, new_refresh_token = authorization_state.use_refresh_token(refresh_token)
 
