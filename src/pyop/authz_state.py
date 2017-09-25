@@ -95,7 +95,7 @@ class AuthorizationState(object):
         authorization_code = rand_str()
         authz_info = {
             'used': False,
-            'exp': time.time() + self.authorization_code_lifetime,
+            'exp': int(time.time()) + self.authorization_code_lifetime,
             'sub': subject_identifier,
             'granted_scope': scope,
             self.KEY_AUTHORIZATION_REQUEST: authorization_request.to_dict()
@@ -129,8 +129,8 @@ class AuthorizationState(object):
         logger.debug('creating access token for scope=%s', scope)
 
         authz_info = {
-            'iat': time.time(),
-            'exp': time.time() + self.access_token_lifetime,
+            'iat': int(time.time()),
+            'exp': int(time.time()) + self.access_token_lifetime,
             'sub': subject_identifier,
             'client_id': auth_req['client_id'],
             'aud': [auth_req['client_id']],
@@ -157,9 +157,9 @@ class AuthorizationState(object):
         if authz_info['used']:
             logger.debug('detected already used authz_code=%s', authorization_code)
             raise InvalidAuthorizationCode('{} has already been used'.format(authorization_code))
-        elif authz_info['exp'] < time.time():
+        elif authz_info['exp'] < int(time.time()):
             logger.debug('detected expired authz_code=%s, now=%s > exp=%s ',
-                         authorization_code, time.time(), authz_info['exp'])
+                         authorization_code, int(time.time()), authz_info['exp'])
             raise InvalidAuthorizationCode('{} has expired'.format(authorization_code))
 
         authz_info['used'] = True
@@ -181,7 +181,7 @@ class AuthorizationState(object):
 
         authz_info = self.access_tokens[access_token_value]
 
-        introspection = {'active': authz_info['exp'] >= time.time()}
+        introspection = {'active': authz_info['exp'] >= int(time.time())}
 
         introspection_params = {k: v for k, v in authz_info.items() if k in TokenIntrospectionResponse.c_param}
         introspection.update(introspection_params)
@@ -200,7 +200,7 @@ class AuthorizationState(object):
             return None
 
         refresh_token = rand_str()
-        authz_info = {'access_token': access_token_value, 'exp': time.time() + self.refresh_token_lifetime}
+        authz_info = {'access_token': access_token_value, 'exp': int(time.time()) + self.refresh_token_lifetime}
         self.refresh_tokens[refresh_token] = authz_info
 
         logger.debug('issued refresh_token=%s expiring=%d for access_token=%s', refresh_token, authz_info['exp'],
@@ -218,7 +218,7 @@ class AuthorizationState(object):
             raise InvalidRefreshToken('{} unknown'.format(refresh_token))
 
         refresh_token_info = self.refresh_tokens[refresh_token]
-        if 'exp' in refresh_token_info and refresh_token_info['exp'] < time.time():
+        if 'exp' in refresh_token_info and refresh_token_info['exp'] < int(time.time()):
             raise InvalidRefreshToken('{} has expired'.format(refresh_token))
 
         authz_info = self.access_tokens[refresh_token_info['access_token']]
@@ -240,7 +240,7 @@ class AuthorizationState(object):
         new_refresh_token = None
         if self.refresh_token_threshold \
                 and 'exp' in refresh_token_info \
-                and refresh_token_info['exp'] - time.time() < self.refresh_token_threshold:
+                and refresh_token_info['exp'] - int(time.time()) < self.refresh_token_threshold:
             # refresh token is close to expiry, issue a new one
             new_refresh_token = self.create_refresh_token(new_access_token.value)
         else:

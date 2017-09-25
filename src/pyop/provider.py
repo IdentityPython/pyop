@@ -263,8 +263,8 @@ class Provider(object):
         id_token = IdToken(iss=self.configuration_information['issuer'],
                            sub=sub,
                            aud=client_id,
-                           iat=time.time(),
-                           exp=time.time() + self.id_token_lifetime,
+                           iat=int(time.time()),
+                           exp=int(time.time()) + self.id_token_lifetime,
                            **args)
 
         if nonce:
@@ -488,7 +488,7 @@ class Provider(object):
         client_id, client_secret = self._issue_new_client()
         credentials = {
             'client_id': client_id,
-            'client_id_issued_at': time.time(),
+            'client_id_issued_at': int(time.time()),
             'client_secret': client_secret,
             'client_secret_expires_at': 0  # never expires
         }
