@@ -357,7 +357,9 @@ class Provider(object):
 
         access_token = self.authz_state.exchange_code_for_token(token_request['code'])
         self._add_access_token_to_response(response, access_token)
-        response['refresh_token'] = self.authz_state.create_refresh_token(access_token.value)
+        refresh_token = self.authz_state.create_refresh_token(access_token.value)
+        if refresh_token is not None:
+            response['refresh_token'] = refresh_token
 
         if extra_id_token_claims is None:
             extra_id_token_claims = {}
