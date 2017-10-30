@@ -8,7 +8,7 @@ Uses [pyoidc](https://github.com/rohe/pyoidc/) and
 [pyjwkest](https://github.com/rohe/pyjwkest).
 
 # Provider implementations using pyOP
-* [se-leg-op](https://github.com/IdentityPython/se-leg-op)
+* [se-leg-op](https://github.com/SUNET/se-leg-op)
 * [SATOSA OIDC frontend](https://github.com/its-dirg/SATOSA/blob/master/src/satosa/frontends/openid_connect.py)
 * [local example](example/views.py)
 
