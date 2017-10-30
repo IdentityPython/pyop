@@ -1,5 +1,5 @@
 # pyOP
-[![Build Status](https://travis-ci.org/SUNET/pyop.svg)](https://travis-ci.org/SUNET/pyop)
+[![Build Status](https://travis-ci.org/IdentityPython/pyop.svg)](https://travis-ci.org/IdentityPython/pyop)
 [![PyPI](https://img.shields.io/pypi/v/pyop.svg)](https://pypi.python.org/pypi/pyop)
 
 
@@ -8,7 +8,7 @@ Uses [pyoidc](https://github.com/rohe/pyoidc/) and
 [pyjwkest](https://github.com/rohe/pyjwkest).
 
 # Provider implementations using pyOP
-* [se-leg-op](https://github.com/SUNET/se-leg-op)
+* [se-leg-op](https://github.com/IdentityPython/se-leg-op)
 * [SATOSA OIDC frontend](https://github.com/its-dirg/SATOSA/blob/master/src/satosa/frontends/openid_connect.py)
 * [local example](example/views.py)
 
