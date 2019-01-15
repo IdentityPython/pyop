@@ -37,18 +37,18 @@ class TestAuthorizationState(object):
     def authorization_state(self, authorization_state_factory):
         return authorization_state_factory(refresh_token_lifetime=3600)
 
-    def assert_access_token(self, access_token, access_token_db, iat):
+    def assert_access_token(self, authorization_request, access_token, access_token_db, iat):
         assert isinstance(access_token, AccessToken)
         assert access_token.expires_in == self.TEST_TOKEN_LIFETIME
         assert access_token.value
         assert access_token.BEARER_TOKEN_TYPE == 'Bearer'
 
         assert access_token.value in access_token_db
-        self.assert_introspected_token(access_token_db[access_token.value], access_token, iat)
+        self.assert_introspected_token(authorization_request, access_token_db[access_token.value], access_token, iat)
         assert access_token_db[access_token.value]['exp'] == iat + self.TEST_TOKEN_LIFETIME
 
-    def assert_introspected_token(self, token_introspection, access_token, iat):
-        auth_req = self.authorization_request().to_dict()
+    def assert_introspected_token(self, authorization_request, token_introspection, access_token, iat):
+        auth_req = authorization_request.to_dict()
 
         assert token_introspection['scope'] == auth_req['scope']
         assert token_introspection['client_id'] == auth_req['client_id']
@@ -91,7 +91,7 @@ class TestAuthorizationState(object):
         self.set_valid_subject_identifier(authorization_state)
 
         access_token = authorization_state.create_access_token(authorization_request, self.TEST_SUBJECT_IDENTIFIER)
-        self.assert_access_token(access_token, authorization_state.access_tokens, MOCK_TIME.return_value)
+        self.assert_access_token(authorization_request, access_token, authorization_state.access_tokens, MOCK_TIME.return_value)
 
     def test_create_access_token_with_scope_other_than_auth_req(self, authorization_state, authorization_request):
         scope = ['openid', 'extra']
@@ -115,7 +115,7 @@ class TestAuthorizationState(object):
         access_token = authorization_state.create_access_token(authorization_request, self.TEST_SUBJECT_IDENTIFIER)
         token_introspection = authorization_state.introspect_access_token(access_token.value)
         assert token_introspection['active'] is True
-        self.assert_introspected_token(token_introspection, access_token, MOCK_TIME.return_value)
+        self.assert_introspected_token(authorization_request, token_introspection, access_token, MOCK_TIME.return_value)
 
     def test_introspect_access_token_with_expired_token(self, authorization_state_factory, authorization_request):
         authorization_state = authorization_state_factory(access_token_lifetime=self.TEST_TOKEN_LIFETIME)
@@ -129,7 +129,7 @@ class TestAuthorizationState(object):
         with patch('time.time', mock_time2):
             token_introspection = authorization_state.introspect_access_token(access_token.value)
         assert token_introspection['active'] is False
-        self.assert_introspected_token(token_introspection, access_token, MOCK_TIME.return_value)
+        self.assert_introspected_token(authorization_request, token_introspection, access_token, MOCK_TIME.return_value)
 
     @pytest.mark.parametrize('access_token', INVALID_INPUT)
     def test_introspect_access_token_with_invalid_access_token(self, access_token, authorization_state):
@@ -149,7 +149,7 @@ class TestAuthorizationState(object):
         authz_code = authorization_state.create_authorization_code(authorization_request, self.TEST_SUBJECT_IDENTIFIER)
         access_token = authorization_state.exchange_code_for_token(authz_code)
 
-        self.assert_access_token(access_token, authorization_state.access_tokens, MOCK_TIME.return_value)
+        self.assert_access_token(authorization_request, access_token, authorization_state.access_tokens, MOCK_TIME.return_value)
         assert authorization_state.authorization_codes[authz_code]['used'] == True
 
     def test_exchange_code_for_token_with_scope_other_than_auth_req(self, authorization_state,
@@ -248,7 +248,7 @@ class TestAuthorizationState(object):
                authorization_state.access_tokens[old_access_token.value]['exp']
         assert authorization_state.access_tokens[new_access_token.value]['iat'] > \
                authorization_state.access_tokens[old_access_token.value]['iat']
-        self.assert_access_token(new_access_token, authorization_state.access_tokens, mock_time2.return_value)
+        self.assert_access_token(authorization_request, new_access_token, authorization_state.access_tokens, mock_time2.return_value)
 
         assert authorization_state.refresh_tokens[refresh_token]['access_token'] == new_access_token.value
 
