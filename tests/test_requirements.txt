@@ -1,2 +1,3 @@
-responses==0.5.1
+pytest
+responses
 pycryptodomex
