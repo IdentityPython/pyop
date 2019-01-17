@@ -91,7 +91,7 @@ The lifetime of authorization codes, access tokens, and refresh tokens is config
 
 ```python
 AuthorizationState(..., authorization_code_lifetime=300, access_token_lifetime=60*60*24,
-                   refresh_token_lifetime=60*60*24*365, refresh_token_threshold=None) 
+                   refresh_token_lifetime=60*60*24*365, refresh_token_threshold=None)
 ```
 
 If not specified the lifetimes defaults to the following values:
@@ -106,9 +106,9 @@ specify a `refresh_token_threshold` > 0.
 
 # Dynamic discovery: Provider Configuration Information
 To publish the provider configuration information at an endpoint, use `Provider.provider_configuration`.
- 
+
 The following example illustrates the high-level idea:
- 
+
 ```python
 @app.route('/.well-known/openid-configuration')
 def provider_config():
@@ -135,7 +135,7 @@ def authorization_endpoints(request):
         else:
             return HTTPResponse("Something went wrong: {}".format(str(e)), status=400)
 
-    session['authn_req'] = authn_req.to_dict()  
+    session['authn_req'] = authn_req.to_dict()
     // TODO initiate end-user authentication
 ```
 
@@ -171,7 +171,7 @@ def request_contains_nonce(authentication_request):
     if 'nonce' not in authentication_request:
         raise InvalidAuthenticationRequest('The request does not contain a nonce', authentication_request,
                                            oauth_error='invalid_request')
-                   
+
 provider.authentication_request_validators.append(request_contains_nonce)
 ```
 
@@ -204,7 +204,7 @@ def token_endpoint(request):
 
 # Userinfo endpoint
 An incoming userinfo request is processed by `Provider.handle_userinfo_request`. It will validate the request and return
-all requested userinfo. 
+all requested userinfo.
 
 ```python
 from oic.oic.message import UserInfoErrorResponse
@@ -229,7 +229,7 @@ def userinfo_endpoint(request):
 
 # Dynamic client registration
 
-An incoming client registration request is process by `Provider.handle_userinfo_request`. It will validate the request,
+An incoming client registration request is process by `Provider.handle_client_registration_request`. It will validate the request,
 store the registered metadata and issue new client credentials.
 
 ```python
@@ -276,12 +276,12 @@ from pyop.exceptions import InvalidSubjectIdentifier
 @app.route('/logout')
 def end_session_endpoint(request):
     end_session_request = EndSessionRequest().deserialize(request.get_data().decode('utf-8'))
-    
+
     try:
         provider.logout_user(session.get('sub'), end_session_request)
     except InvalidSubjectIdentifier as e:
         return HTTPResponse('Logout unsuccessful!', content_type='text/html', status=400)
-        
+
     # TODO automagic logout, should ask user first!
     redirect_url = provider.do_post_logout_redirect(end_session_request)
     if redirect_url:
