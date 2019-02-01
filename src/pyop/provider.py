@@ -45,7 +45,7 @@ logger = logging.getLogger(__name__)
 
 class Provider(object):
     def __init__(self, signing_key, configuration_information, authz_state, clients, userinfo, *,
-                 id_token_lifetime=3600):
+                 id_token_lifetime=3600, extra_scopes=None):
         # type: (jwkest.jwk.Key, Dict[str, Union[str, Sequence[str]]], se_leg_op.authz_state.AuthorizationState,
         #        Mapping[str, Mapping[str, Any]], se_leg_op.userinfo.Userinfo, int) -> None
         """
@@ -68,6 +68,12 @@ class Provider(object):
             self.configuration_information['scopes_supported'] = ['openid']
         if 'response_types_supported' not in configuration_information:
             self.configuration_information['response_types_supported'] = ['code', 'id_token', 'token id_token']
+
+        self.extra_scopes = {} if extra_scopes is None else extra_scopes
+        _scopes = self.configuration_information['scopes_supported']
+        _scopes.extend(self.extra_scopes.keys())
+        self.configuration_information['scopes_supported'] = list(set(_scopes))
+
         self.configuration_information.verify()
 
         self.authz_state = authz_state
@@ -166,7 +172,11 @@ class Provider(object):
             if len(authentication_request['response_type']) == 1:
                 # only id token is issued -> no way of doing userinfo request, so include all claims in ID Token,
                 # even those requested by the scope parameter
-                requested_claims.update(scope2claims(authentication_request['scope']))
+                requested_claims.update(
+                    scope2claims(
+                        authentication_request['scope'], extra_scope_dict=self.extra_scopes
+                    )
+                )
 
             user_claims = self.userinfo.get_claims_for(user_id, requested_claims)
             response['id_token'] = self._create_signed_id_token(authentication_request['client_id'], sub,
@@ -340,7 +350,7 @@ class Provider(object):
             raise InvalidTokenRequest(str(e), token_request) from e
 
         authentication_request = self.authz_state.get_authorization_request_for_code(token_request['code'])
-        
+
         if token_request['client_id'] != authentication_request['client_id']:
             logger.info('Authorization code \'%s\' belonging to \'%s\' was used by \'%s\'',
                         token_request['code'], authentication_request['client_id'], token_request['client_id'])
@@ -430,10 +440,10 @@ class Provider(object):
         introspection = self.authz_state.introspect_access_token(bearer_token)
         if not introspection['active']:
             raise InvalidAccessToken('The access token has expired')
-        scope = introspection['scope']
+        scopes = introspection['scope'].split()
         user_id = self.authz_state.get_user_id_for_subject_identifier(introspection['sub'])
 
-        requested_claims = scope2claims(scope.split())
+        requested_claims = scope2claims(scopes, extra_scope_dict=self.extra_scopes)
         authentication_request = self.authz_state.get_authorization_request_for_access_token(bearer_token)
         requested_claims.update(self._get_requested_claims_in(authentication_request, 'userinfo'))
         user_claims = self.userinfo.get_claims_for(user_id, requested_claims)
