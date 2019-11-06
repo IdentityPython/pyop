@@ -19,7 +19,7 @@ class MongoWrapper(object):
             'data': value,
             'modified_ts': time()
         }
-        self._coll.update({'lookup_key': key}, doc, upsert=True)
+        self._coll.replace_one({'lookup_key': key}, doc, upsert=True)
 
     def __getitem__(self, key):
         doc = self._coll.find_one({'lookup_key': key})
@@ -28,10 +28,10 @@ class MongoWrapper(object):
         return doc['data']
 
     def __delitem__(self, key):
-        self._coll.remove({'lookup_key': key})
+        self._coll.delete_one({'lookup_key': key})
 
     def __contains__(self, key):
-        count = self._coll.count({'lookup_key': key})
+        count = self._coll.count_documents({'lookup_key': key})
         return bool(count)
 
     def items(self):
