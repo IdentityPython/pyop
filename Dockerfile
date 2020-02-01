@@ -2,35 +2,23 @@ FROM ubuntu:16.04
 
 ENV DEBIAN_FRONTEND noninteractive
 
-RUN /bin/echo -e "deb http://se.archive.ubuntu.com/ubuntu xenial main restricted universe\ndeb http://archive.ubuntu.com/ubuntu xenial-updates main restricted universe\ndeb http://security.ubuntu.com/ubuntu xenial-security main restricted universe" > /etc/apt/sources.list
-
 RUN apt-get update && \
     apt-get -y dist-upgrade && \
     apt-get -y install \
         python3-pip \
-        python-virtualenv \
         libpython3-dev \
         python-setuptools \
         build-essential \
-        libffi-dev \
         libssl-dev \
-        iputils-ping \
-    && apt-get clean
+    && apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 
-RUN rm -rf /var/lib/apt/lists/*
+COPY ./ /usr/src/pyop
+WORKDIR /usr/src/pyop
+RUN python3 setup.py bdist_wheel && pip3 install dist/pyop-*.whl && \
+    pip3 install -r example/requirements.txt
 
-RUN adduser --system --no-create-home --shell /bin/false --group pyop
-
-COPY . /opt/pyop/src/
-COPY docker/setup.sh /opt/pyop/setup.sh
-COPY docker/start.sh /start.sh
-RUN /opt/pyop/setup.sh
-
-# Add Dockerfile to the container as documentation
-COPY Dockerfile /Dockerfile
-
-WORKDIR /
-
+ENV FLASK_APP=pyop
 EXPOSE 9090
 
-CMD ["bash", "/start.sh"]
+CMD gunicorn -w 1 -b 0.0.0.0:9090 "example.wsgi:app" --certfile example/https.crt --keyfile example/https.key
