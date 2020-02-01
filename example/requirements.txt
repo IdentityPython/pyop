@@ -1,3 +1,2 @@
-pyop
 Flask
 gunicorn

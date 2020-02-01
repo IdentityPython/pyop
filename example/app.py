@@ -27,18 +27,21 @@ def init_oidc_provider(app):
         'registration_endpoint': registration_endpoint,
         'end_session_endpoint': end_session_endpoint,
         'scopes_supported': ['openid', 'profile'],
-        'response_types_supported': ['code', 'code id_token', 'code token', 'code id_token token'],  # code and hybrid
+        'response_types_supported': ['code', 'code id_token', 'code token',
+                                     'code id_token token'],  # code and hybrid
         'response_modes_supported': ['query', 'fragment'],
         'grant_types_supported': ['authorization_code', 'implicit'],
         'subject_types_supported': ['pairwise'],
-        'token_endpoint_auth_methods_supported': ['client_secret_basic'],
+        'token_endpoint_auth_methods_supported': ['client_secret_basic',
+                                                  'client_secret_post'],
         'claims_parameter_supported': True
     }
 
     userinfo_db = Userinfo(app.users)
     signing_key = RSAKey(key=rsa_load('signing_key.pem'), alg='RS256')
     provider = Provider(signing_key, configuration_information,
-                        AuthorizationState(HashBasedSubjectIdentifierFactory(app.config['SUBJECT_ID_HASH_SALT'])),
+                        AuthorizationState(HashBasedSubjectIdentifierFactory(
+                            app.config['SUBJECT_ID_HASH_SALT'])),
                         {}, userinfo_db)
 
     return provider
