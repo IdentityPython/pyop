@@ -52,7 +52,9 @@ def oidc_provider_init_app(name=None):
     app = Flask(name)
     app.config.from_pyfile('application.cfg')
 
-    app.users = {'test_user': {'name': 'Testing Name'}}
+    # Set any values that need returned in /userinfo response
+    app.users = {'test_user': {'name': 'Testing Name',
+                               'email': 'test@gmail.com'}}
 
     from .views import oidc_provider_views
     app.register_blueprint(oidc_provider_views)

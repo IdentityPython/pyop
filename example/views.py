@@ -23,6 +23,11 @@ def index():
 
 @oidc_provider_views.route('/registration', methods=['POST'])
 def registration_endpoint():
+    """Endpoint to register RP with this OP example. It will give you a
+    client id and client secret that can be used with a web application using
+    open id connect.
+    This endpoint will also set anything that is passed in the request body.
+    """
     try:
         response = current_app.provider.handle_client_registration_request(flask.request.get_data().decode('utf-8'))
         return make_response(jsonify(response.to_dict()), 201)
