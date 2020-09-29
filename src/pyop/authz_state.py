@@ -271,7 +271,7 @@ class AuthorizationState(object):
                 new_sub = self._subject_identifier_factory.create_public_identifier(user_id)
                 self.subject_identifiers[user_id] = {'public': new_sub}
 
-                logger.debug('created new public sub=% for user_id=%s',
+                logger.debug('created new public sub=%s for user_id=%s',
                              self.subject_identifiers[user_id]['public'], user_id)
             sub = self.subject_identifiers[user_id]['public']
             logger.debug('returning public sub=%s', sub)
