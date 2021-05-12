@@ -1,11 +1,59 @@
 # -*- coding: utf-8 -*-
 
+from abc import ABC, abstractmethod
 import copy
+import json
 import pymongo
+from redis.client import Redis
 from time import time
 
 
-class MongoWrapper(object):
+class StorageBase(ABC):
+    _ttl = None
+
+    @abstractmethod
+    def __setitem__(self, key, value):
+        pass
+
+    @abstractmethod
+    def __getitem__(self, key):
+        pass
+
+    @abstractmethod
+    def __delitem__(self, key):
+        pass
+
+    @abstractmethod
+    def __contains__(self, key):
+        pass
+
+    @abstractmethod
+    def items(self):
+        pass
+
+    def pop(self, key, default=None):
+        try:
+            data = self[key]
+        except KeyError:
+            return default
+        del self[key]
+        return data
+
+    @classmethod
+    def from_uri(cls, db_uri, collection, db_name=None, ttl=None):
+        if db_uri.startswith("mongodb"):
+            return MongoWrapper(db_uri, db_name, collection, ttl)
+        if db_uri.startswith("redis") or db_uri.startswith("unix"):
+            return RedisWrapper(db_uri, collection, ttl)
+
+        return ValueError(f"Invalid DB URI: {db_uri}")
+
+    @property
+    def ttl(self):
+        return self._ttl
+
+
+class MongoWrapper(StorageBase):
     def __init__(self, db_uri, db_name, collection):
         self._db_uri = db_uri
         self._coll_name = collection
@@ -38,13 +86,52 @@ class MongoWrapper(object):
         for doc in self._coll.find():
             yield (doc['lookup_key'], doc['data'])
 
-    def pop(self, key, default=None):
-        try:
-            data = self[key]
-        except KeyError:
-            return default
-        del self[key]
-        return data
+
+class RedisWrapper(StorageBase):
+    """
+    Simple wrapper for a dict-like storage in Redis.
+    Supports JSON-serializable data types.
+    """
+
+    def __init__(self, db_uri, collection, ttl=None):
+        self._db = Redis.from_url(db_uri, decode_responses=True)
+        self._collection = collection
+        if ttl is None or (isinstance(ttl, int) and ttl >= 0):
+            self._ttl = ttl
+        else:
+            raise ValueError("TTL must be a non-negative integer or None")
+
+    def _make_key(self, key):
+        if not isinstance(key, str):
+            raise TypeError(f"Keys must be strings, {type(key).__name__} given")
+
+        return ":".join([self._collection, key])
+
+    def __setitem__(self, key, value):
+        # Replacing the value of a key resets the ttl counter
+        encoded = json.dumps({ "value": value })
+        self._db.set(self._make_key(key), encoded, ex=self.ttl)
+
+    def __getitem__(self, key):
+        encoded = self._db.get(self._make_key(key))
+        if encoded is None:
+            raise KeyError(key)
+        return json.loads(encoded).get("value")
+
+    def __delitem__(self, key):
+        # Deleting a non-existent key is allowed
+        self._db.delete(self._make_key(key))
+
+    def __contains__(self, key):
+        return (self._db.get(self._make_key(key)) is not None)
+
+    def items(self):
+        for key in self._db.keys(self._collection + "*"):
+            visible_key = key[len(self._collection) + 1 :]
+            try:
+                yield (visible_key, self[visible_key])
+            except KeyError:
+                pass
 
 
 class MongoDB(object):
