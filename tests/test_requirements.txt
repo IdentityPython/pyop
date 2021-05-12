@@ -1,3 +1,6 @@
-pytest
+pytest >= 6.2
+pip >= 19.0
 responses
 pycryptodomex
+fakeredis
+mongomock
