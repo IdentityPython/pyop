@@ -168,3 +168,15 @@ class TestRedisTTL(StorageTTLTest):
 
     def test_ttl(self):
         self.execute_ttl_test("redis://localhost/0", 3600)
+
+
+class TestMongoTTL(StorageTTLTest):
+    def set_time(self, offset, monkeypatch):
+        now = datetime.datetime.utcnow()
+        def new_time():
+            return now + datetime.timedelta(seconds=offset)
+
+        monkeypatch.setattr(mongomock, "utcnow", new_time)
+
+    def test_ttl(self):
+        self.execute_ttl_test("mongodb://localhost/pyop", 3600)

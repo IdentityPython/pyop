@@ -5,7 +5,7 @@ import copy
 import json
 import pymongo
 from redis.client import Redis
-from time import time
+from datetime import datetime
 
 
 class StorageBase(ABC):
@@ -54,18 +54,29 @@ class StorageBase(ABC):
 
 
 class MongoWrapper(StorageBase):
-    def __init__(self, db_uri, db_name, collection):
+    def __init__(self, db_uri, db_name, collection, ttl=None):
         self._db_uri = db_uri
         self._coll_name = collection
         self._db = MongoDB(db_uri, db_name=db_name)
         self._coll = self._db.get_collection(collection)
         self._coll.create_index('lookup_key', unique=True)
 
+        if ttl is None or (isinstance(ttl, int) and ttl >= 0):
+            self._ttl = ttl
+        else:
+            raise ValueError("TTL must be a non-negative integer or None")
+        if ttl is not None:
+            self._coll.create_index(
+                'last_modified',
+                expireAfterSeconds=ttl,
+                name="expiry"
+            )
+
     def __setitem__(self, key, value):
         doc = {
             'lookup_key': key,
             'data': value,
-            'modified_ts': time()
+            'last_modified': datetime.utcnow()
         }
         self._coll.replace_one({'lookup_key': key}, doc, upsert=True)
 
@@ -143,14 +154,16 @@ class MongoDB(object):
         if db_uri is None:
             raise ValueError('db_uri not supplied')
 
-        self._db_uri = db_uri
-        self._database_name = db_name
         self._sanitized_uri = None
 
         self._parsed_uri = pymongo.uri_parser.parse_uri(db_uri)
 
-        if self._parsed_uri.get('database') is None:
-            self._parsed_uri['database'] = db_name
+        db_name = self._parsed_uri.get('database') or db_name
+        if db_name is None:
+            raise ValueError(
+                "Database name must be provided either in the URI or as an argument"
+            )
+        self._database_name = self._parsed_uri['database'] = db_name
 
         if 'replicaSet' in kwargs and kwargs['replicaSet'] is None:
             del kwargs['replicaSet']
