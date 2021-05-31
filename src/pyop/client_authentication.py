@@ -1,5 +1,6 @@
 import base64
 import logging
+from urllib.parse import unquote
 
 from .exceptions import InvalidClientAuthentication
 
@@ -35,7 +36,7 @@ def verify_client_authentication(clients, parsed_request, authz_header=None):
                 auth = base64.urlsafe_b64decode(credentials.encode('utf-8')).decode('utf-8')
             except UnicodeDecodeError as e:
                 raise InvalidClientAuthentication('Could not userid/password from authorization header'.format(authz_scheme))
-            client_id, client_secret = auth.split(':')
+            client_id, client_secret = [unquote(part) for part in auth.split(':')]
         else:
             raise InvalidClientAuthentication('Unknown scheme in authorization header, {} != Basic'.format(authz_scheme))
     elif 'client_id' in parsed_request:
