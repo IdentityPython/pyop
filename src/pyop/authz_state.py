@@ -59,25 +59,25 @@ class AuthorizationState(object):
         """
         Mapping of authorization codes to the subject identifier and auth request.
         """
-        self.authorization_codes = authorization_code_db or {}
+        self.authorization_codes = authorization_code_db if authorization_code_db is not None else {}
 
         self.access_token_lifetime = access_token_lifetime
         """
         Mapping of access tokens to the scope, token type, client id and subject identifier.
         """
-        self.access_tokens = access_token_db or {}
+        self.access_tokens = access_token_db if access_token_db is not None else {}
 
         self.refresh_token_lifetime = refresh_token_lifetime
         self.refresh_token_threshold = refresh_token_threshold
         """
         Mapping of refresh tokens to access tokens.
         """
-        self.refresh_tokens = refresh_token_db or {}
+        self.refresh_tokens = refresh_token_db if refresh_token_db is not None else {}
 
         """
         Mapping of user id's to subject identifiers.
         """
-        self.subject_identifiers = subject_identifier_db or {}
+        self.subject_identifiers = subject_identifier_db if subject_identifier_db is not None else {}
 
     def create_authorization_code(self, authorization_request, subject_identifier, scope=None):
         # type: (oic.oic.message.AuthorizationRequest, str, Optional[List[str]]) -> str
