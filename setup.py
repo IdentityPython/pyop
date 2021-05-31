@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='pyop',
-    version='3.1.0',
+    version='3.1.1',
     packages=find_packages('src'),
     package_dir={'': 'src'},
     url='https://github.com/IdentityPython/pyop',
