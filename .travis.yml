@@ -1,10 +1,11 @@
-dist: xenial
+os: linux
+dist: bionic
+language: python
 
 services:
   - docker
   - mongodb
 
-language: python
 install:
   - pip install tox
   - pip install tox-travis
@@ -13,9 +14,12 @@ script:
   - tox
 
 jobs:
+  allow_failures:
+    - python: 3.9-dev
   include:
     - python: 3.6
     - python: 3.7
+    - python: 3.8
     - python: pypy3
 
     - stage: Deploy new release
