@@ -11,7 +11,7 @@ import mongomock
 import pymongo
 import time
 
-from pyop.storage import StorageBase
+import pyop.storage
 
 __author__ = 'lundberg'
 
@@ -32,7 +32,9 @@ def mock_mongo():
 class TestStorage(object):
     @pytest.fixture(params=uri_list)
     def db(self, request):
-        return StorageBase.from_uri(request.param, db_name="pyop", collection='test')
+        return pyop.storage.StorageBase.from_uri(
+            request.param, db_name="pyop", collection="test"
+        )
 
     def test_write(self, db):
         db['foo'] = 'bar'
@@ -79,7 +81,7 @@ class TestStorage(object):
         ],
     )
     def test_from_uri(self, args, kwargs):
-        store = StorageBase.from_uri(*args, **kwargs)
+        store = pyop.storage.StorageBase.from_uri(*args, **kwargs)
         store["test"] = "value"
         assert store["test"] == "value"
 
@@ -118,12 +120,12 @@ class TestStorage(object):
     )
     def test_from_uri_invalid_parameters(self, error, args, kwargs):
         with pytest.raises(error):
-            StorageBase.from_uri(*args, **kwargs)
+            pyop.storage.StorageBase.from_uri(*args, **kwargs)
 
 
 class StorageTTLTest(ABC):
     def prepare_db(self, uri, ttl):
-        self.db = StorageBase.from_uri(
+        self.db = pyop.storage.StorageBase.from_uri(
             uri,
             collection="test",
             ttl=ttl,
@@ -169,6 +171,13 @@ class TestRedisTTL(StorageTTLTest):
     def test_ttl(self):
         self.execute_ttl_test("redis://localhost/0", 3600)
 
+    def test_missing_module(self):
+        pyop.storage._has_redis = False
+        self.prepare_db("mongodb://localhost/0", None)
+        with pytest.raises(ImportError):
+            self.prepare_db("redis://localhost/0", None)
+        pyop.storage._has_redis = True
+
 
 class TestMongoTTL(StorageTTLTest):
     def set_time(self, offset, monkeypatch):
@@ -180,3 +189,10 @@ class TestMongoTTL(StorageTTLTest):
 
     def test_ttl(self):
         self.execute_ttl_test("mongodb://localhost/pyop", 3600)
+
+    def test_missing_module(self):
+        pyop.storage._has_pymongo = False
+        self.prepare_db("redis://localhost/0", None)
+        with pytest.raises(ImportError):
+            self.prepare_db("mongodb://localhost/0", None)
+        pyop.storage._has_pymongo = True
