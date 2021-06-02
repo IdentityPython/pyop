@@ -3,10 +3,18 @@
 from abc import ABC, abstractmethod
 import copy
 import json
-import pymongo
-from redis.client import Redis
 from datetime import datetime
+import sys
 
+try:
+    import pymongo
+except ImportError:
+    pass
+
+try:
+    from redis.client import Redis
+except ImportError:
+    pass
 
 class StorageBase(ABC):
     _ttl = None
@@ -52,9 +60,17 @@ class StorageBase(ABC):
     def ttl(self):
         return self._ttl
 
+    def ensure_dependency(self, dependencies):
+        for module in dependencies:
+            if not module in sys.modules:
+                raise ImportError(
+                    f"'{module}' module is required but it is not available"
+                )
+
 
 class MongoWrapper(StorageBase):
     def __init__(self, db_uri, db_name, collection, ttl=None):
+        self.ensure_dependency(["pymongo"])
         self._db_uri = db_uri
         self._coll_name = collection
         self._db = MongoDB(db_uri, db_name=db_name)
@@ -105,6 +121,7 @@ class RedisWrapper(StorageBase):
     """
 
     def __init__(self, db_uri, collection, ttl=None):
+        self.ensure_dependency(["redis.client"])
         self._db = Redis.from_url(db_uri, decode_responses=True)
         self._collection = collection
         if ttl is None or (isinstance(ttl, int) and ttl >= 0):

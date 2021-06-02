@@ -11,7 +11,9 @@ setup(
     author_email='satosa-dev@lists.sunet.se',
     description='OpenID Connect Provider (OP) library in Python.',
     install_requires=[
-        'oic >= 0.15.0',
+        'oic >= 0.15.0'
+    ]
+    extras_require=[
         'pymongo',
         'redis'
     ]

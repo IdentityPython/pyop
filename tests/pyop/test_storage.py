@@ -10,6 +10,7 @@ import fakeredis
 import mongomock
 import pymongo
 import time
+import sys
 
 from pyop.storage import StorageBase
 
@@ -169,6 +170,12 @@ class TestRedisTTL(StorageTTLTest):
     def test_ttl(self):
         self.execute_ttl_test("redis://localhost/0", 3600)
 
+    def test_missing_module(self):
+        sys.modules.pop("redis.client")
+        with pytest.raises(ImportError):
+            self.prepare_db("redis://localhost/0", None)
+        from redis.client import Redis
+
 
 class TestMongoTTL(StorageTTLTest):
     def set_time(self, offset, monkeypatch):
@@ -180,3 +187,9 @@ class TestMongoTTL(StorageTTLTest):
 
     def test_ttl(self):
         self.execute_ttl_test("mongodb://localhost/pyop", 3600)
+
+    def test_missing_module(self):
+        sys.modules.pop("pymongo")
+        with pytest.raises(ImportError):
+            self.prepare_db("mongodb://localhost/0", None)
+        import pymongo
