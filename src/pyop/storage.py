@@ -160,7 +160,7 @@ class RedisWrapper(StorageBase):
 
     def items(self):
         for key in self._db.keys(self._collection + "*"):
-            visible_key = key[len(self._collection) + 1 :]
+            visible_key = key[len(self._collection) + 1 :].decode()
             try:
                 yield (visible_key, self[visible_key])
             except KeyError:
