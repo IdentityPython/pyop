@@ -13,8 +13,8 @@ setup(
     install_requires=[
         'oic >= 1.2.1',
     ],
-    extras_require=[
-        'pymongo',
-        'redis',
-    ]
+    extras_require={
+        'mongo': 'pymongo',
+        'redis': 'redis',
+    },
 )
