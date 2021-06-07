@@ -122,6 +122,7 @@ class RedisWrapper(StorageBase):
 
     def __init__(self, collection, db_uri=None, redis=Redis(), ttl=None):
         self.ensure_dependency(["redis.client"])
+
         self._collection = collection
 
         if db_uri is not None:
