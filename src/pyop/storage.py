@@ -120,10 +120,15 @@ class RedisWrapper(StorageBase):
     Supports JSON-serializable data types.
     """
 
-    def __init__(self, db_uri, collection, ttl=None):
+    def __init__(self, collection, db_uri=None, redis=Redis(), ttl=None):
         self.ensure_dependency(["redis.client"])
-        self._db = Redis.from_url(db_uri, decode_responses=True)
         self._collection = collection
+
+        if db_uri is not None:
+            self._db = Redis.from_url(db_uri, decode_responses=True)
+        else:
+            self._db = redis
+
         if ttl is None or (isinstance(ttl, int) and ttl >= 0):
             self._ttl = ttl
         else:
