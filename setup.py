@@ -12,9 +12,9 @@ setup(
     description='OpenID Connect Provider (OP) library in Python.',
     install_requires=[
         'oic >= 0.15.0'
-    ]
-    extras_require=[
-        'pymongo',
-        'redis'
-    ]
+    ],
+    extras_require={
+        'mongo': 'pymongo',
+        'redis': 'redis'
+    }
 )
