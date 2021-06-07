@@ -12,7 +12,7 @@ import pymongo
 import time
 import sys
 
-from pyop.storage import StorageBase
+import pyop.storage
 
 __author__ = 'lundberg'
 
@@ -33,7 +33,9 @@ def mock_mongo():
 class TestStorage(object):
     @pytest.fixture(params=uri_list)
     def db(self, request):
-        return StorageBase.from_uri(request.param, db_name="pyop", collection='test')
+        return pyop.storage.StorageBase.from_uri(
+            request.param, db_name="pyop", collection="test"
+        )
 
     def test_write(self, db):
         db['foo'] = 'bar'
@@ -80,7 +82,7 @@ class TestStorage(object):
         ],
     )
     def test_from_uri(self, args, kwargs):
-        store = StorageBase.from_uri(*args, **kwargs)
+        store = pyop.storage.StorageBase.from_uri(*args, **kwargs)
         store["test"] = "value"
         assert store["test"] == "value"
 
@@ -119,12 +121,12 @@ class TestStorage(object):
     )
     def test_from_uri_invalid_parameters(self, error, args, kwargs):
         with pytest.raises(error):
-            StorageBase.from_uri(*args, **kwargs)
+            pyop.storage.StorageBase.from_uri(*args, **kwargs)
 
 
 class StorageTTLTest(ABC):
     def prepare_db(self, uri, ttl):
-        self.db = StorageBase.from_uri(
+        self.db = pyop.storage.StorageBase.from_uri(
             uri,
             collection="test",
             ttl=ttl,
