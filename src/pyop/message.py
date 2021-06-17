@@ -18,7 +18,7 @@ class AuthorizationRequest(message.Message):
         }
     )
 
-    c_allowed_values = message.AuthorizationRequest.c_param.copy()
+    c_allowed_values = message.AuthorizationRequest.c_allowed_values.copy()
     c_allowed_values.update(
         {
         "code_challenge_method": [
