@@ -330,7 +330,10 @@ class Provider(object):
         raise InvalidTokenRequest('grant_type \'{}\' unknown'.format(token_request['grant_type']), token_request,
                                   oauth_error='unsupported_grant_type')
 
-    def _compute_code_challenge(self, code_verifier):
+    def _compute_code_challenge(self, 
+                                code_verifier # type: str
+                                ):
+        # type: (...) -> str
         """
         Given a code verifier compute the code_challenge. This code_challenge is computed as defined (https://datatracker.ietf.org/doc/html/rfc7636#section-4.2):
 
@@ -344,14 +347,18 @@ class Provider(object):
         verifier_hash = nacl.hash.sha256(code_verifier.encode('ISO_8859_1'), encoder=URLSafeBase64Encoder)
         return verifier_hash.decode().replace('=', '')
 
-    def _PKCE_verify(self, token_request, authentication_request):
+    def _PKCE_verify(self, 
+                     token_request, # type: AccessTokenRequest
+                     authentication_request # type: AuthorizationRequest
+                    ):
+        # type: (...) -> bool
         """
         Verify that the given code_verifier complies with the initially supplied code_challenge.
 
         Only supports the SHA256 code challenge method, plaintext is regarded as unsafe.
 
-        :param cc_cm: the initially supplied Code Challenge Code challenge Method dictionary
-        :param code_verifier: the code_verfier to check against the code challenge.
+        :param token_request: the token request containing the initially supplied code challenge and code_challenge method.
+        :param authentication_request: the code_verfier to check against the code challenge.
         :returns: whether the code_verifier is what was expected given the cc_cm
         """
         code_challenge_method = authentication_request['code_challenge_method']
@@ -361,7 +368,20 @@ class Provider(object):
         code_challenge = self._compute_code_challenge(token_request['code_verifier'])
         return code_challenge == authentication_request['code_challenge']
 
-    def _verify_code_exchange_req(self, token_request, authentication_request):
+    def _verify_code_exchange_req(self, 
+                                  token_request, # type: AccessTokenRequest
+                                  authentication_request # type: AuthorizationRequest
+                                  ):
+        # type: (...) -> None
+        """
+        Verify that the code exchange request is valid. In order to be valid we validate
+        the expected client and redirect_uri. Finally, if requested by the client, perform a
+        PKCE check.
+
+        :param token_request: The request asking for a token given a code, and optionally a code_verifier
+        :param authentication_request: The authentication request belonging to the provided code.
+        :raises InvalidTokenRequest, InvalidAuthorizationCode: If request is invalid, throw a representing exception. 
+        """ 
         if token_request['client_id'] != authentication_request['client_id']:
             logger.info('Authorization code \'%s\' belonging to \'%s\' was used by \'%s\'',
                         token_request['code'], authentication_request['client_id'], token_request['client_id'])
