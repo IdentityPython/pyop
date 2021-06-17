@@ -4,3 +4,5 @@ responses
 pycryptodomex
 fakeredis
 mongomock
+pymongo
+redis
