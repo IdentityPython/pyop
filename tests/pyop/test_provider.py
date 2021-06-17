@@ -332,6 +332,20 @@ class TestProviderHandleTokenRequest(object):
         assert response['access_token'] in self.provider.authz_state.access_tokens
         assert_id_token_base_claims(response['id_token'], self.provider.signing_key, self.provider,
                                     self.authn_request_args)
+
+    @patch('time.time', MOCK_TIME)
+    def test_pkce_code_exchange_request_plaintext(self):
+        self.authorization_code_exchange_request_args['code'] = self.create_authz_code(
+            {
+                "code_challenge": "SoOEDN-mZKNhw7Mc52VXxyiqTvFB3mod36MwPru253c",
+                "code_challenge_method": "plain"
+            }
+        )
+        self.authorization_code_exchange_request_args['code_verifier'] = "SoOEDN-mZKNhw7Mc52VXxyiqTvFB3mod36MwPru253c"
+        response = self.provider._do_code_exchange(self.authorization_code_exchange_request_args, None)
+        assert response['access_token'] in self.provider.authz_state.access_tokens
+        assert_id_token_base_claims(response['id_token'], self.provider.signing_key, self.provider,
+                                    self.authn_request_args)
     @patch('time.time', MOCK_TIME)
     def test_code_exchange_request_with_claims_requested_in_id_token(self):
         claims_req = {'claims': ClaimsRequest(id_token=Claims(email=None))}
@@ -389,8 +403,13 @@ class TestProviderHandleTokenRequest(object):
             self.provider.handle_token_request(urlencode(self.authorization_code_exchange_request_args))
 
     def test_handle_token_request_reject_invalid_code_verifier(self):
-        del self.authorization_code_exchange_request_args['grant_type']
-        self.authorization_code_exchange_request_args['code'] = self.create_authz_code()
+        self.authorization_code_exchange_request_args['code'] = self.create_authz_code(
+            {
+                "code_challenge": "_1f8tFjAtu6D1Df-GOyDPoMjCJdEvaSWsnqR6SLpzsw=",
+                "code_challenge_method": "S256"
+            }
+        )
+        self.authorization_code_exchange_request_args['code_verifier'] = "ThiS Cer_tainly Ain't Valid"
         with pytest.raises(InvalidTokenRequest):
             self.provider.handle_token_request(urlencode(self.authorization_code_exchange_request_args))
 
