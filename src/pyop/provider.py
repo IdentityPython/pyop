@@ -361,6 +361,13 @@ class Provider(object):
         :param authentication_request: the code_verfier to check against the code challenge.
         :returns: whether the code_verifier is what was expected given the cc_cm
         """
+        if not 'code_verifier' in token_request:
+            return False
+
+        if not 'code_challenge_method' in authentication_request:
+            raise InvalidTokenRequest("A code_challenge and code_verifier have been supplied" 
+                                      "but missing code_challenge_method in authentication_request", token_request)
+
         code_challenge_method = authentication_request['code_challenge_method']
         if code_challenge_method == 'plain':
             return authentication_request['code_challenge'] == token_request['code_verifier']
