@@ -6,14 +6,14 @@ import uuid
 from urllib.parse import parse_qsl
 from urllib.parse import urlparse
 
+import nacl.hash
+from nacl.encoding import URLSafeBase64Encoder
 from jwkest import jws
 from oic import rndstr
 from oic.exception import MessageException
 from oic.oic import PREFERENCE2PROVIDER
 from oic.oic import scope2claims
-from oic.oic.message import AccessTokenRequest
 from oic.oic.message import AccessTokenResponse
-from oic.oic.message import AuthorizationRequest
 from oic.oic.message import AuthorizationResponse
 from oic.oic.message import EndSessionRequest
 from oic.oic.message import EndSessionResponse
@@ -24,6 +24,8 @@ from oic.oic.message import RefreshAccessTokenRequest
 from oic.oic.message import RegistrationRequest
 from oic.oic.message import RegistrationResponse
 
+from .message import AuthorizationRequest
+from .message import AccessTokenRequest
 from .access_token import extract_bearer_token_from_http_request
 from .client_authentication import verify_client_authentication
 from .exceptions import AuthorizationError
@@ -328,6 +330,49 @@ class Provider(object):
         raise InvalidTokenRequest('grant_type \'{}\' unknown'.format(token_request['grant_type']), token_request,
                                   oauth_error='unsupported_grant_type')
 
+    def _compute_code_challenge(self, code_verifier):
+        """
+        Given a code verifier compute the code_challenge. This code_challenge is computed as defined (https://datatracker.ietf.org/doc/html/rfc7636#section-4.2):
+
+            code_challenge = BASE64URL-ENCODE(SHA256(ASCII(code_verifier))).
+
+        This shows that the SHA256 of the ascii encoded code_verifier is URLSafe base64 encoded. We have adjusted the encoding to the ISO_8859_1 encoding,
+        conform to the AppAuth SDK for Android and IOS. Moreover, we remove the base64 padding (=).
+
+        :param code_verifier: the code verifier to transform to the Code Challenge
+        """
+        verifier_hash = nacl.hash.sha256(code_verifier.encode('ISO_8859_1'), encoder=URLSafeBase64Encoder)
+        return verifier_hash.decode().replace('=', '')
+
+    def _PKCE_verify(self, token_request, authentication_request):
+        """
+        Verify that the given code_verifier complies with the initially supplied code_challenge.
+
+        Only supports the SHA256 code challenge method, plaintext is regarded as unsafe.
+
+        :param cc_cm: the initially supplied Code Challenge Code challenge Method dictionary
+        :param code_verifier: the code_verfier to check against the code challenge.
+        :returns: whether the code_verifier is what was expected given the cc_cm
+        """
+        code_challenge_method = authentication_request['code_challenge_method']
+        if code_challenge_method == 'plain':
+            return authentication_request['code_challenge'] == token_request['code_verifier']
+
+        code_challenge = self._compute_code_challenge(token_request['code_verifier'])
+        return code_challenge == authentication_request['code_challenge']
+
+    def _verify_code_exchange_req(self, token_request, authentication_request):
+        if token_request['client_id'] != authentication_request['client_id']:
+            logger.info('Authorization code \'%s\' belonging to \'%s\' was used by \'%s\'',
+                        token_request['code'], authentication_request['client_id'], token_request['client_id'])
+            raise InvalidAuthorizationCode('{} unknown'.format(token_request['code']))
+        if token_request['redirect_uri'] != authentication_request['redirect_uri']:
+            raise InvalidTokenRequest('Invalid redirect_uri: {} != {}'.format(token_request['redirect_uri'],
+                                                                              authentication_request['redirect_uri']),
+                                      token_request)
+        if not self._PKCE_verify(token_request, authentication_request):
+            raise InvalidTokenRequest('Unexpected Code Verifier: {}'.format(authentication_request['code_challenge']))
+
     def _do_code_exchange(self, request,  # type: Dict[str, str]
                           extra_id_token_claims=None
                           # type: Optional[Union[Mapping[str, Union[str, List[str]]], Callable[[str, str], Mapping[str, Union[str, List[str]]]]]
@@ -351,14 +396,7 @@ class Provider(object):
 
         authentication_request = self.authz_state.get_authorization_request_for_code(token_request['code'])
 
-        if token_request['client_id'] != authentication_request['client_id']:
-            logger.info('Authorization code \'%s\' belonging to \'%s\' was used by \'%s\'',
-                        token_request['code'], authentication_request['client_id'], token_request['client_id'])
-            raise InvalidAuthorizationCode('{} unknown'.format(token_request['code']))
-        if token_request['redirect_uri'] != authentication_request['redirect_uri']:
-            raise InvalidTokenRequest('Invalid redirect_uri: {} != {}'.format(token_request['redirect_uri'],
-                                                                              authentication_request['redirect_uri']),
-                                      token_request)
+        self._verify_code_exchange_req(token_request, authentication_request)
 
         sub = self.authz_state.get_subject_identifier_for_code(token_request['code'])
         user_id = self.authz_state.get_user_id_for_subject_identifier(sub)
@@ -393,7 +431,7 @@ class Provider(object):
         Handles a token request for refreshing an access token (grant_type=refresh_token).
         :param request: parsed http request parameters
         :return: a token response containing a new Access Token and possibly a new Refresh Token
-        :raise InvalidTokenRequest: if the token request is invalid
+        :raise InvalidTtoken_requestokenRequest: if the token request is invalid
         """
         token_request = RefreshAccessTokenRequest().from_dict(request)
         try:
