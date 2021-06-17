@@ -4,8 +4,8 @@ import time
 from unittest.mock import patch, Mock
 
 import pytest
-from oic.oic.message import AuthorizationRequest
 
+from pyop.message import AuthorizationRequest
 from pyop.authz_state import AccessToken, InvalidScope
 from pyop.authz_state import AuthorizationState
 from pyop.exceptions import InvalidSubjectIdentifier, InvalidAccessToken, InvalidAuthorizationCode, InvalidRefreshToken

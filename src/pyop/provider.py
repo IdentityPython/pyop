@@ -83,7 +83,7 @@ class Provider(object):
         self.userinfo = userinfo
         self.id_token_lifetime = id_token_lifetime
 
-        self.authentication_request_validators = []  # type: List[Callable[[oic.oic.message.AuthorizationRequest], Boolean]]
+        self.authentication_request_validators = []  # type: List[Callable[[AuthorizationRequest], Boolean]]
         self.authentication_request_validators.append(authorization_request_verify)
         self.authentication_request_validators.append(
             functools.partial(client_id_is_known, self))
@@ -116,7 +116,7 @@ class Provider(object):
         return {'keys': keys}
 
     def parse_authentication_request(self, request_body, http_headers=None):
-        # type: (str, Optional[Mapping[str, str]]) -> oic.oic.message.AuthorizationRequest
+        # type: (str, Optional[Mapping[str, str]]) -> AuthorizationRequest
         """
         Parses and verifies an authentication request.
 
@@ -132,7 +132,7 @@ class Provider(object):
         logger.debug('parsed authentication_request: %s', auth_req)
         return auth_req
 
-    def authorize(self, authentication_request,  # type: oic.oic.message.AuthorizationRequest
+    def authorize(self, authentication_request,  # type: AuthorizationRequest
                   user_id,  # type: str
                   extra_id_token_claims=None
                   # type: Optional[Union[Mapping[str, Union[str, List[str]]], Callable[[str, str], Mapping[str, Union[str, List[str]]]]]
@@ -218,7 +218,7 @@ class Provider(object):
         return self.authz_state.get_subject_identifier(subject_type, user_id, sector_identifier)
 
     def _get_requested_claims_in(self, authentication_request, response_method):
-        # type (oic.oic.message.AuthorizationRequest, str) -> Mapping[str, Optional[Mapping[str, Union[str, List[str]]]]
+        # type (AuthorizationRequest, str) -> Mapping[str, Optional[Mapping[str, Union[str, List[str]]]]
         """
         Parses any claims requested using the 'claims' request parameter, see
         <a href="http://openid.net/specs/openid-connect-core-1_0.html#ClaimsParameter">
@@ -286,7 +286,7 @@ class Provider(object):
         return id_token.to_jwt([self.signing_key], alg)
 
     def _check_subject_identifier_matches_requested(self, authentication_request, sub):
-        # type (oic.message.AuthorizationRequest, str) -> None
+        # type (AuthorizationRequest, str) -> None
         """
         Verifies the subject identifier against any requested subject identifier using the claims request parameter.
         :param authentication_request: authentication request
