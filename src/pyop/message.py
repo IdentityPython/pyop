@@ -1,7 +1,7 @@
 from oic.oauth2.message import SINGLE_OPTIONAL_STRING
 from oic.oic import message
 
-class AccessTokenRequest(message.Message):
+class AccessTokenRequest(message.AccessTokenRequest):
     c_param = message.AccessTokenRequest.c_param.copy()
     c_param.update(
         {
@@ -9,7 +9,7 @@ class AccessTokenRequest(message.Message):
         }
     )
 
-class AuthorizationRequest(message.Message):
+class AuthorizationRequest(message.AuthorizationRequest):
     c_param = message.AuthorizationRequest.c_param.copy()
     c_param.update(
         {

@@ -381,7 +381,7 @@ class Provider(object):
         :param token_request: The request asking for a token given a code, and optionally a code_verifier
         :param authentication_request: The authentication request belonging to the provided code.
         :raises InvalidTokenRequest, InvalidAuthorizationCode: If request is invalid, throw a representing exception. 
-        """ 
+        """
         if token_request['client_id'] != authentication_request['client_id']:
             logger.info('Authorization code \'%s\' belonging to \'%s\' was used by \'%s\'',
                         token_request['code'], authentication_request['client_id'], token_request['client_id'])
@@ -391,7 +391,8 @@ class Provider(object):
                                                                               authentication_request['redirect_uri']),
                                       token_request)
         if 'code_challenge' in authentication_request and not self._PKCE_verify(token_request, authentication_request):
-            raise InvalidTokenRequest('Unexpected Code Verifier: {}'.format(authentication_request['code_challenge']))
+            raise InvalidTokenRequest('Unexpected Code Verifier: {}'.format(authentication_request['code_challenge']),
+                                      token_request)
 
     def _do_code_exchange(self, request,  # type: Dict[str, str]
                           extra_id_token_claims=None
