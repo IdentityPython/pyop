@@ -370,7 +370,7 @@ class Provider(object):
             raise InvalidTokenRequest('Invalid redirect_uri: {} != {}'.format(token_request['redirect_uri'],
                                                                               authentication_request['redirect_uri']),
                                       token_request)
-        if not self._PKCE_verify(token_request, authentication_request):
+        if 'code_challenge' in authentication_request and not self._PKCE_verify(token_request, authentication_request):
             raise InvalidTokenRequest('Unexpected Code Verifier: {}'.format(authentication_request['code_challenge']))
 
     def _do_code_exchange(self, request,  # type: Dict[str, str]
