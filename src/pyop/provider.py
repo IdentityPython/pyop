@@ -459,7 +459,7 @@ class Provider(object):
         Handles a token request for refreshing an access token (grant_type=refresh_token).
         :param request: parsed http request parameters
         :return: a token response containing a new Access Token and possibly a new Refresh Token
-        :raise InvalidTtoken_requestokenRequest: if the token request is invalid
+        :raise InvalidTokenRequest: if the token request is invalid
         """
         token_request = RefreshAccessTokenRequest().from_dict(request)
         try:
