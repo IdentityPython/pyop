@@ -54,9 +54,11 @@ class StorageBase(ABC):
     @classmethod
     def from_uri(cls, db_uri, collection, db_name=None, ttl=None):
         if db_uri.startswith("mongodb"):
-            return MongoWrapper(db_uri, db_name, collection, ttl)
-        if db_uri.startswith("redis") or db_uri.startswith("unix"):
-            return RedisWrapper(db_uri, collection, ttl)
+            return MongoWrapper(
+                db_uri=db_uri, db_name=db_name, collection=collection, ttl=ttl
+            )
+        elif db_uri.startswith("redis") or db_uri.startswith("unix"):
+            return RedisWrapper(db_uri=db_uri, collection=collection, ttl=ttl)
 
         return ValueError(f"Invalid DB URI: {db_uri}")
 
