@@ -6,8 +6,6 @@ import uuid
 from urllib.parse import parse_qsl
 from urllib.parse import urlparse
 
-import nacl.hash
-from nacl.encoding import URLSafeBase64Encoder
 from jwkest import jws
 from oic import rndstr
 from oic.exception import MessageException
@@ -23,6 +21,7 @@ from oic.oic.message import ProviderConfigurationResponse
 from oic.oic.message import RefreshAccessTokenRequest
 from oic.oic.message import RegistrationRequest
 from oic.oic.message import RegistrationResponse
+from oic.extension.provider import Provider as OICProviderExtensions
 
 from .message import AuthorizationRequest
 from .message import AccessTokenRequest
@@ -330,23 +329,6 @@ class Provider(object):
         raise InvalidTokenRequest('grant_type \'{}\' unknown'.format(token_request['grant_type']), token_request,
                                   oauth_error='unsupported_grant_type')
 
-    def _compute_code_challenge(self, 
-                                code_verifier # type: str
-                                ):
-        # type: (...) -> str
-        """
-        Given a code verifier compute the code_challenge. This code_challenge is computed as defined (https://datatracker.ietf.org/doc/html/rfc7636#section-4.2):
-
-            code_challenge = BASE64URL-ENCODE(SHA256(ASCII(code_verifier))).
-
-        This shows that the SHA256 of the ascii encoded code_verifier is URLSafe base64 encoded. We have adjusted the encoding to the ISO_8859_1 encoding,
-        conform to the AppAuth SDK for Android and IOS. Moreover, we remove the base64 padding (=).
-
-        :param code_verifier: the code verifier to transform to the Code Challenge
-        """
-        verifier_hash = nacl.hash.sha256(code_verifier.encode('ISO_8859_1'), encoder=URLSafeBase64Encoder)
-        return verifier_hash.decode().replace('=', '')
-
     def _PKCE_verify(self, 
                      token_request, # type: AccessTokenRequest
                      authentication_request # type: AuthorizationRequest
@@ -368,12 +350,10 @@ class Provider(object):
             raise InvalidTokenRequest("A code_challenge and code_verifier have been supplied" 
                                       "but missing code_challenge_method in authentication_request", token_request)
 
-        code_challenge_method = authentication_request['code_challenge_method']
-        if code_challenge_method == 'plain':
-            return authentication_request['code_challenge'] == token_request['code_verifier']
-
-        code_challenge = self._compute_code_challenge(token_request['code_verifier'])
-        return code_challenge == authentication_request['code_challenge']
+        # OIC Provider extension returns either a boolean or Response object containing an error. To support 
+        # stricter typing guidelines, return if True. Error handling support should be in encapsulating function.
+        return OICProviderExtensions.verify_code_challenge(token_request['code_verifier'], 
+                                                           authentication_request['code_challenge'], authentication_request['code_challenge_method']) == True
 
     def _verify_code_exchange_req(self, 
                                   token_request, # type: AccessTokenRequest

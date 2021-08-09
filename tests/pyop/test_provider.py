@@ -334,20 +334,6 @@ class TestProviderHandleTokenRequest(object):
                                     self.authn_request_args)
 
     @patch('time.time', MOCK_TIME)
-    def test_pkce_code_exchange_request_plaintext(self):
-        self.authorization_code_exchange_request_args['code'] = self.create_authz_code(
-            {
-                "code_challenge": "SoOEDN-mZKNhw7Mc52VXxyiqTvFB3mod36MwPru253c",
-                "code_challenge_method": "plain"
-            }
-        )
-        self.authorization_code_exchange_request_args['code_verifier'] = "SoOEDN-mZKNhw7Mc52VXxyiqTvFB3mod36MwPru253c"
-        response = self.provider._do_code_exchange(self.authorization_code_exchange_request_args, None)
-        assert response['access_token'] in self.provider.authz_state.access_tokens
-        assert_id_token_base_claims(response['id_token'], self.provider.signing_key, self.provider,
-                                    self.authn_request_args)
-
-    @patch('time.time', MOCK_TIME)
     def test_code_exchange_request_with_claims_requested_in_id_token(self):
         claims_req = {'claims': ClaimsRequest(id_token=Claims(email=None))}
         self.authorization_code_exchange_request_args['code'] = self.create_authz_code(extra_auth_req_params=claims_req)
