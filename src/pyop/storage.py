@@ -52,13 +52,23 @@ class StorageBase(ABC):
         return data
 
     @classmethod
-    def from_uri(cls, db_uri, collection, db_name=None, ttl=None):
+    def from_uri(cls, db_uri, collection, db_name=None, ttl=None, **kwargs):
         if db_uri.startswith("mongodb"):
             return MongoWrapper(
-                db_uri=db_uri, db_name=db_name, collection=collection, ttl=ttl
+                db_uri=db_uri,
+                db_name=db_name,
+                collection=collection,
+                ttl=ttl,
+                extra_options=kwargs,
             )
         elif db_uri.startswith("redis") or db_uri.startswith("unix"):
-            return RedisWrapper(db_uri=db_uri, collection=collection, ttl=ttl)
+            return RedisWrapper(
+                db_uri=db_uri,
+                db_name=db_name,
+                collection=collection,
+                ttl=ttl,
+                extra_options=kwargs,
+            )
 
         return ValueError(f"Invalid DB URI: {db_uri}")
 
@@ -68,12 +78,18 @@ class StorageBase(ABC):
 
 
 class MongoWrapper(StorageBase):
-    def __init__(self, db_uri, db_name, collection, ttl=None):
+    def __init__(self, db_uri, db_name, collection, ttl=None, extra_options=None):
         if not _has_pymongo:
             raise ImportError("pymongo module is required but it is not available")
+
+        if not extra_options:
+            extra_options = {}
+
+        mongo_options = extra_options.pop("mongo_kwargs", None) or {}
+
         self._db_uri = db_uri
         self._coll_name = collection
-        self._db = MongoDB(db_uri, db_name=db_name)
+        self._db = MongoDB(db_uri, db_name=db_name, **mongo_options)
         self._coll = self._db.get_collection(collection)
         self._coll.create_index('lookup_key', unique=True)
 
@@ -120,13 +136,21 @@ class RedisWrapper(StorageBase):
     Supports JSON-serializable data types.
     """
 
-    def __init__(self, db_uri, collection, ttl=None, options={}):
-        if options is None:
-            options = {}
-
+    def __init__(
+        self, db_uri, *, db_name=None, collection, ttl=None, extra_options=None
+    ):
         if not _has_redis:
             raise ImportError("redis module is required but it is not available")
-        self._db = Redis.from_url(db_uri, decode_responses=True, **options.get('redis_kwargs', {}))
+
+        if not extra_options:
+            extra_options = {}
+
+        redis_kwargs = extra_options.pop("redis_kwargs", None) or {}
+        redis_options = {
+            "decode_responses": True, "db": db_name, **redis_kwargs
+        }
+
+        self._db = Redis.from_url(db_uri, **redis_options)
         self._collection = collection
         if ttl is None or (isinstance(ttl, int) and ttl >= 0):
             self._ttl = ttl
@@ -173,14 +197,11 @@ class RedisWrapper(StorageBase):
 class MongoDB(object):
     """Simple wrapper to get pymongo real objects from the settings uri"""
 
-    def __init__(self, db_uri, db_name=None,
-                 connection_factory=None, **kwargs):
-
+    def __init__(self, db_uri, db_name=None, connection_factory=None, **kwargs):
         if db_uri is None:
             raise ValueError('db_uri not supplied')
 
         self._sanitized_uri = None
-
         self._parsed_uri = pymongo.uri_parser.parse_uri(db_uri)
 
         db_name = self._parsed_uri.get('database') or db_name
