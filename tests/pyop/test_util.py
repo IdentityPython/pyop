@@ -1,6 +1,6 @@
 import pytest
-from oic.oic.message import AuthorizationRequest
 
+from pyop.message import AuthorizationRequest
 from pyop.util import should_fragment_encode
 
 

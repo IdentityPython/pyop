@@ -12,8 +12,9 @@ from jwkest.jwk import RSAKey
 from oic import rndstr
 from oic.oauth2.message import MissingRequiredValue, MissingRequiredAttribute
 from oic.oic import PREFERENCE2PROVIDER
-from oic.oic.message import IdToken, AuthorizationRequest, ClaimsRequest, Claims, EndSessionRequest, EndSessionResponse
+from oic.oic.message import IdToken, ClaimsRequest, Claims, EndSessionRequest, EndSessionResponse
 
+from pyop.message import AuthorizationRequest
 from pyop.access_token import BearerTokenError
 from pyop.authz_state import AuthorizationState
 from pyop.client_authentication import InvalidClientAuthentication
@@ -319,6 +320,20 @@ class TestProviderHandleTokenRequest(object):
                                     self.authn_request_args)
 
     @patch('time.time', MOCK_TIME)
+    def test_pkce_code_exchange_request(self):
+        self.authorization_code_exchange_request_args['code'] = self.create_authz_code(
+            {
+                "code_challenge": "_1f8tFjAtu6D1Df-GOyDPoMjCJdEvaSWsnqR6SLpzsw",
+                "code_challenge_method": "S256"
+            }
+        )
+        self.authorization_code_exchange_request_args['code_verifier'] = "SoOEDN-mZKNhw7Mc52VXxyiqTvFB3mod36MwPru253c"
+        response = self.provider._do_code_exchange(self.authorization_code_exchange_request_args, None)
+        assert response['access_token'] in self.provider.authz_state.access_tokens
+        assert_id_token_base_claims(response['id_token'], self.provider.signing_key, self.provider,
+                                    self.authn_request_args)
+
+    @patch('time.time', MOCK_TIME)
     def test_code_exchange_request_with_claims_requested_in_id_token(self):
         claims_req = {'claims': ClaimsRequest(id_token=Claims(email=None))}
         self.authorization_code_exchange_request_args['code'] = self.create_authz_code(extra_auth_req_params=claims_req)
@@ -371,6 +386,36 @@ class TestProviderHandleTokenRequest(object):
     def test_handle_token_request_reject_missing_grant_type(self):
         del self.authorization_code_exchange_request_args['grant_type']
         self.authorization_code_exchange_request_args['code'] = self.create_authz_code()
+        with pytest.raises(InvalidTokenRequest):
+            self.provider.handle_token_request(urlencode(self.authorization_code_exchange_request_args))
+
+    def test_handle_token_request_reject_invalid_code_verifier(self):
+        self.authorization_code_exchange_request_args['code'] = self.create_authz_code(
+            {
+                "code_challenge": "_1f8tFjAtu6D1Df-GOyDPoMjCJdEvaSWsnqR6SLpzsw=",
+                "code_challenge_method": "S256"
+            }
+        )
+        self.authorization_code_exchange_request_args['code_verifier'] = "ThiS Cer_tainly Ain't Valid"
+        with pytest.raises(InvalidTokenRequest):
+            self.provider.handle_token_request(urlencode(self.authorization_code_exchange_request_args))
+
+    def test_handle_token_request_reject_unsynced_requests(self):
+        self.authorization_code_exchange_request_args['code'] = self.create_authz_code(
+            {
+                "code_challenge": "_1f8tFjAtu6D1Df-GOyDPoMjCJdEvaSWsnqR6SLpzsw=",
+                "code_challenge_method": "S256"
+            }
+        )
+        with pytest.raises(InvalidTokenRequest):
+            self.provider.handle_token_request(urlencode(self.authorization_code_exchange_request_args))
+
+    def test_handle_token_request_reject_missing_code_challenge_method(self):
+        self.authorization_code_exchange_request_args['code'] = self.create_authz_code(
+            {
+                "code_challenge": "_1f8tFjAtu6D1Df-GOyDPoMjCJdEvaSWsnqR6SLpzsw=",
+            }
+        )
         with pytest.raises(InvalidTokenRequest):
             self.provider.handle_token_request(urlencode(self.authorization_code_exchange_request_args))
 

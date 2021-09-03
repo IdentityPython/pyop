@@ -146,7 +146,7 @@ user data and OpenID Connect claim names. Hence the underlying data source must 
 same names as the [standard claims of OpenID Connect](http://openid.net/specs/openid-connect-core-1_0.html#StandardClaims).
 
 ```python
-from oic.oic.message import AuthorizationRequest
+from pyop.message import AuthorizationRequest
 
 from pyop.util import should_fragment_encode
 

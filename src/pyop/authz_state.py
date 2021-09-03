@@ -3,8 +3,8 @@ import time
 import uuid
 
 from oic.extension.message import TokenIntrospectionResponse
-from oic.oic.message import AuthorizationRequest
 
+from .message import AuthorizationRequest
 from .access_token import AccessToken
 from .exceptions import InvalidAccessToken
 from .exceptions import InvalidAuthorizationCode
@@ -80,7 +80,7 @@ class AuthorizationState(object):
         self.subject_identifiers = subject_identifier_db if subject_identifier_db is not None else {}
 
     def create_authorization_code(self, authorization_request, subject_identifier, scope=None):
-        # type: (oic.oic.message.AuthorizationRequest, str, Optional[List[str]]) -> str
+        # type: (AuthorizationRequest, str, Optional[List[str]]) -> str
         """
         Creates an authorization code bound to the authorization request and the authenticated user identified
         by the subject identifier.
@@ -106,7 +106,7 @@ class AuthorizationState(object):
         return authorization_code
 
     def create_access_token(self, authorization_request, subject_identifier, scope=None):
-        # type: (oic.oic.message.AuthorizationRequest, str, Optional[List[str]]) -> se_leg_op.access_token.AccessToken
+        # type: (AuthorizationRequest, str, Optional[List[str]]) -> se_leg_op.access_token.AccessToken
         """
         Creates an access token bound to the authentication request and the authenticated user identified by the
         subject identifier.
@@ -315,7 +315,7 @@ class AuthorizationState(object):
         raise InvalidSubjectIdentifier('{} unknown'.format(subject_identifier))
 
     def get_authorization_request_for_code(self, authorization_code):
-        # type: (str) -> oic.oic.message.AuthorizationRequest
+        # type: (str) -> AuthorizationRequest
         if authorization_code not in self.authorization_codes:
             raise InvalidAuthorizationCode('{} unknown'.format(authorization_code))
 
@@ -323,14 +323,14 @@ class AuthorizationState(object):
             self.authorization_codes[authorization_code][self.KEY_AUTHORIZATION_REQUEST])
 
     def get_authorization_request_for_access_token(self, access_token_value):
-        # type: (str) -> oic.oic.message.AuthorizationRequest
+        # type: (str) -> 
         if access_token_value not in self.access_tokens:
             raise InvalidAccessToken('{} unknown'.format(access_token_value))
 
         return AuthorizationRequest().from_dict(self.access_tokens[access_token_value][self.KEY_AUTHORIZATION_REQUEST])
 
     def get_subject_identifier_for_code(self, authorization_code):
-        # type: (str) -> oic.oic.message.AuthorizationRequest
+        # type: (str) -> AuthorizationRequest
         if authorization_code not in self.authorization_codes:
             raise InvalidAuthorizationCode('{} unknown'.format(authorization_code))
 

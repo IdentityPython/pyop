@@ -1,7 +1,6 @@
 from urllib.parse import urlparse, parse_qsl
 
-from oic.oic.message import AuthorizationRequest
-
+from pyop.message import AuthorizationRequest
 from pyop.exceptions import InvalidAuthenticationRequest
 
 

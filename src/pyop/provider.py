@@ -11,9 +11,7 @@ from oic import rndstr
 from oic.exception import MessageException
 from oic.oic import PREFERENCE2PROVIDER
 from oic.oic import scope2claims
-from oic.oic.message import AccessTokenRequest
 from oic.oic.message import AccessTokenResponse
-from oic.oic.message import AuthorizationRequest
 from oic.oic.message import AuthorizationResponse
 from oic.oic.message import EndSessionRequest
 from oic.oic.message import EndSessionResponse
@@ -23,7 +21,10 @@ from oic.oic.message import ProviderConfigurationResponse
 from oic.oic.message import RefreshAccessTokenRequest
 from oic.oic.message import RegistrationRequest
 from oic.oic.message import RegistrationResponse
+from oic.extension.provider import Provider as OICProviderExtensions
 
+from .message import AuthorizationRequest
+from .message import AccessTokenRequest
 from .access_token import extract_bearer_token_from_http_request
 from .client_authentication import verify_client_authentication
 from .exceptions import AuthorizationError
@@ -81,7 +82,7 @@ class Provider(object):
         self.userinfo = userinfo
         self.id_token_lifetime = id_token_lifetime
 
-        self.authentication_request_validators = []  # type: List[Callable[[oic.oic.message.AuthorizationRequest], Boolean]]
+        self.authentication_request_validators = []  # type: List[Callable[[AuthorizationRequest], Boolean]]
         self.authentication_request_validators.append(authorization_request_verify)
         self.authentication_request_validators.append(
             functools.partial(client_id_is_known, self))
@@ -114,7 +115,7 @@ class Provider(object):
         return {'keys': keys}
 
     def parse_authentication_request(self, request_body, http_headers=None):
-        # type: (str, Optional[Mapping[str, str]]) -> oic.oic.message.AuthorizationRequest
+        # type: (str, Optional[Mapping[str, str]]) -> AuthorizationRequest
         """
         Parses and verifies an authentication request.
 
@@ -130,7 +131,7 @@ class Provider(object):
         logger.debug('parsed authentication_request: %s', auth_req)
         return auth_req
 
-    def authorize(self, authentication_request,  # type: oic.oic.message.AuthorizationRequest
+    def authorize(self, authentication_request,  # type: AuthorizationRequest
                   user_id,  # type: str
                   extra_id_token_claims=None
                   # type: Optional[Union[Mapping[str, Union[str, List[str]]], Callable[[str, str], Mapping[str, Union[str, List[str]]]]]
@@ -216,7 +217,7 @@ class Provider(object):
         return self.authz_state.get_subject_identifier(subject_type, user_id, sector_identifier)
 
     def _get_requested_claims_in(self, authentication_request, response_method):
-        # type (oic.oic.message.AuthorizationRequest, str) -> Mapping[str, Optional[Mapping[str, Union[str, List[str]]]]
+        # type (AuthorizationRequest, str) -> Mapping[str, Optional[Mapping[str, Union[str, List[str]]]]
         """
         Parses any claims requested using the 'claims' request parameter, see
         <a href="http://openid.net/specs/openid-connect-core-1_0.html#ClaimsParameter">
@@ -284,7 +285,7 @@ class Provider(object):
         return id_token.to_jwt([self.signing_key], alg)
 
     def _check_subject_identifier_matches_requested(self, authentication_request, sub):
-        # type (oic.message.AuthorizationRequest, str) -> None
+        # type (AuthorizationRequest, str) -> None
         """
         Verifies the subject identifier against any requested subject identifier using the claims request parameter.
         :param authentication_request: authentication request
@@ -328,6 +329,58 @@ class Provider(object):
         raise InvalidTokenRequest('grant_type \'{}\' unknown'.format(token_request['grant_type']), token_request,
                                   oauth_error='unsupported_grant_type')
 
+    def _PKCE_verify(self, 
+                     token_request, # type: AccessTokenRequest
+                     authentication_request # type: AuthorizationRequest
+                    ):
+        # type: (...) -> bool
+        """
+        Verify that the given code_verifier complies with the initially supplied code_challenge.
+
+        Only supports the SHA256 code challenge method, plaintext is regarded as unsafe.
+
+        :param token_request: the token request containing the initially supplied code challenge and code_challenge method.
+        :param authentication_request: the code_verfier to check against the code challenge.
+        :returns: whether the code_verifier is what was expected given the cc_cm
+        """
+        if not 'code_verifier' in token_request:
+            return False
+
+        if not 'code_challenge_method' in authentication_request:
+            raise InvalidTokenRequest("A code_challenge and code_verifier have been supplied" 
+                                      "but missing code_challenge_method in authentication_request", token_request)
+
+        # OIC Provider extension returns either a boolean or Response object containing an error. To support 
+        # stricter typing guidelines, return if True. Error handling support should be in encapsulating function.
+        return OICProviderExtensions.verify_code_challenge(token_request['code_verifier'], 
+                                                           authentication_request['code_challenge'], authentication_request['code_challenge_method']) == True
+
+    def _verify_code_exchange_req(self, 
+                                  token_request, # type: AccessTokenRequest
+                                  authentication_request # type: AuthorizationRequest
+                                  ):
+        # type: (...) -> None
+        """
+        Verify that the code exchange request is valid. In order to be valid we validate
+        the expected client and redirect_uri. Finally, if requested by the client, perform a
+        PKCE check.
+
+        :param token_request: The request asking for a token given a code, and optionally a code_verifier
+        :param authentication_request: The authentication request belonging to the provided code.
+        :raises InvalidTokenRequest, InvalidAuthorizationCode: If request is invalid, throw a representing exception. 
+        """
+        if token_request['client_id'] != authentication_request['client_id']:
+            logger.info('Authorization code \'%s\' belonging to \'%s\' was used by \'%s\'',
+                        token_request['code'], authentication_request['client_id'], token_request['client_id'])
+            raise InvalidAuthorizationCode('{} unknown'.format(token_request['code']))
+        if token_request['redirect_uri'] != authentication_request['redirect_uri']:
+            raise InvalidTokenRequest('Invalid redirect_uri: {} != {}'.format(token_request['redirect_uri'],
+                                                                              authentication_request['redirect_uri']),
+                                      token_request)
+        if 'code_challenge' in authentication_request and not self._PKCE_verify(token_request, authentication_request):
+            raise InvalidTokenRequest('Unexpected Code Verifier: {}'.format(authentication_request['code_challenge']),
+                                      token_request)
+
     def _do_code_exchange(self, request,  # type: Dict[str, str]
                           extra_id_token_claims=None
                           # type: Optional[Union[Mapping[str, Union[str, List[str]]], Callable[[str, str], Mapping[str, Union[str, List[str]]]]]
@@ -351,14 +404,7 @@ class Provider(object):
 
         authentication_request = self.authz_state.get_authorization_request_for_code(token_request['code'])
 
-        if token_request['client_id'] != authentication_request['client_id']:
-            logger.info('Authorization code \'%s\' belonging to \'%s\' was used by \'%s\'',
-                        token_request['code'], authentication_request['client_id'], token_request['client_id'])
-            raise InvalidAuthorizationCode('{} unknown'.format(token_request['code']))
-        if token_request['redirect_uri'] != authentication_request['redirect_uri']:
-            raise InvalidTokenRequest('Invalid redirect_uri: {} != {}'.format(token_request['redirect_uri'],
-                                                                              authentication_request['redirect_uri']),
-                                      token_request)
+        self._verify_code_exchange_req(token_request, authentication_request)
 
         sub = self.authz_state.get_subject_identifier_for_code(token_request['code'])
         user_id = self.authz_state.get_user_id_for_subject_identifier(sub)
