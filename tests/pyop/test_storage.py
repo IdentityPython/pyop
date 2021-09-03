@@ -16,12 +16,16 @@ import pyop.storage
 __author__ = 'lundberg'
 
 
-uri_list = ["mongodb://localhost:1234/pyop", "redis://localhost/0"]
+db_specs_list = [
+    {"uri": "mongodb://localhost:1234/pyop", "name": "pyop"},
+    {"uri": "redis://localhost/0", "name": 0},
+]
+
 
 @pytest.fixture(autouse=True)
 def mock_redis(monkeypatch):
     def mockreturn(*args, **kwargs):
-        return fakeredis.FakeStrictRedis(decode_responses=True)
+        return fakeredis.FakeStrictRedis(*args, **kwargs)
     monkeypatch.setattr(Redis, "from_url", mockreturn)
 
 @pytest.fixture(autouse=True)
@@ -30,10 +34,10 @@ def mock_mongo():
 
 
 class TestStorage(object):
-    @pytest.fixture(params=uri_list)
+    @pytest.fixture(params=db_specs_list)
     def db(self, request):
         return pyop.storage.StorageBase.from_uri(
-            request.param, db_name="pyop", collection="test"
+            request.param["uri"], db_name=request.param["name"], collection="test"
         )
 
     def test_write(self, db):
@@ -69,15 +73,15 @@ class TestStorage(object):
     @pytest.mark.parametrize(
         "args,kwargs",
         [
-            (["redis://localhost"], {"collection": "test"}),
-            (["redis://localhost", "test"], {}),
-            (["unix://localhost/0"], {"collection": "test", "ttl": 3}),
             (["mongodb://localhost/pyop"], {"collection": "test", "ttl": 3}),
             (["mongodb://localhost"], {"db_name": "pyop", "collection": "test"}),
             (["mongodb://localhost", "test", "pyop"], {}),
             (["mongodb://localhost/pyop", "test"], {}),
             (["mongodb://localhost/pyop"], {"db_name": "other", "collection": "test"}),
-            (["redis://localhost/0"], {"db_name": "pyop", "collection": "test"}),
+            (["redis://localhost"], {"collection": "test"}),
+            (["redis://localhost", "test"], {}),
+            (["redis://localhost"], {"db_name": 2, "collection": "test"}),
+            (["unix://localhost/0"], {"collection": "test", "ttl": 3}),
         ],
     )
     def test_from_uri(self, args, kwargs):
@@ -88,11 +92,7 @@ class TestStorage(object):
     @pytest.mark.parametrize(
         "error,args,kwargs",
         [
-            (
-                TypeError,
-                ["redis://localhost", "ouch"],
-                {"db_name": 3, "collection": "test", "ttl": None},
-            ),
+            (ValueError, ["mongodb://localhost"], {"collection": "test", "ttl": None}),
             (
                 TypeError,
                 ["mongodb://localhost", "ouch"],
@@ -110,12 +110,11 @@ class TestStorage(object):
             ),
             (
                 TypeError,
-                ["mongodb://localhost"],
-                {"db_name": "pyop", "collection": "test", "ttl": None, "extra": True},
+                ["redis://localhost", "ouch"],
+                {"db_name": 3, "collection": "test", "ttl": None},
             ),
             (TypeError, ["redis://localhost/0"], {}),
             (TypeError, ["redis://localhost/0"], {"db_name": "pyop"}),
-            (ValueError, ["mongodb://localhost"], {"collection": "test", "ttl": None}),
         ],
     )
     def test_from_uri_invalid_parameters(self, error, args, kwargs):
@@ -153,11 +152,11 @@ class StorageTTLTest(ABC):
             with pytest.raises(KeyError):
                 self.db["foo"]
 
-    @pytest.mark.parametrize("uri", uri_list)
+    @pytest.mark.parametrize("spec", db_specs_list)
     @pytest.mark.parametrize("ttl", ["invalid", -1, 2.3, {}])
-    def test_invalid_ttl(self, uri, ttl):
+    def test_invalid_ttl(self, spec, ttl):
         with pytest.raises(ValueError):
-            self.prepare_db(uri, ttl)
+            self.prepare_db(spec["uri"], ttl)
 
 
 class TestRedisTTL(StorageTTLTest):
