@@ -43,18 +43,23 @@ def redirect_uri_is_in_registered_redirect_uris(provider, authentication_request
     :param authentication_request: authentication request to verify
     :raise InvalidAuthenticationRequest: if the redirect uri is not registered
     """
-    error = InvalidRedirectURI('Redirect uri is not registered',
-                                         authentication_request,
-                                         oauth_error="invalid_request")
     try:
         allowed_redirect_uris = provider.clients[authentication_request['client_id']]['redirect_uris']
     except KeyError as e:
         logger.error('client metadata is missing redirect_uris')
-        raise error
+        raise InvalidRedirectURI(
+            'No redirect uri registered for this client',
+            authentication_request,
+            oauth_error="invalid_request",
+        )
 
     if authentication_request['redirect_uri'] not in allowed_redirect_uris:
         logger.error("Redirect uri \'{0}\' is not registered for this client".format(authentication_request['redirect_uri']))
-        raise error
+        raise InvalidRedirectURI(
+            'Redirect uri is not registered for this client',
+            authentication_request,
+            oauth_error="invalid_request",
+        )
 
 
 def response_type_is_in_registered_response_types(provider, authentication_request):
