@@ -3,7 +3,9 @@ import logging
 from oic.exception import MessageException
 from oic.oic import PREFERENCE2PROVIDER
 
-from .exceptions import InvalidClientRegistrationRequest, InvalidAuthenticationRequest
+from .exceptions import InvalidClientRegistrationRequest
+from .exceptions import InvalidAuthenticationRequest
+from .exceptions import InvalidRedirectURI
 from .util import is_allowed_response_type, find_common_values
 
 logger = logging.getLogger(__name__)
@@ -41,7 +43,7 @@ def redirect_uri_is_in_registered_redirect_uris(provider, authentication_request
     :param authentication_request: authentication request to verify
     :raise InvalidAuthenticationRequest: if the redirect uri is not registered
     """
-    error = InvalidAuthenticationRequest('Redirect uri is not registered',
+    error = InvalidRedirectURI('Redirect uri is not registered',
                                          authentication_request,
                                          oauth_error="invalid_request")
     try:
@@ -63,7 +65,7 @@ def response_type_is_in_registered_response_types(provider, authentication_reque
     :raise InvalidAuthenticationRequest: if the response type is not allowed
     """
     error = InvalidAuthenticationRequest('Response type is not registered',
-                                         authentication_request, 
+                                         authentication_request,
                                          oauth_error='invalid_request')
     try:
         allowed_response_types = provider.clients[authentication_request['client_id']]['response_types']

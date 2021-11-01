@@ -59,6 +59,11 @@ class InvalidAuthenticationRequest(InvalidRequestError):
         return None
 
 
+class InvalidRedirectURI(InvalidAuthenticationRequest):
+    def to_error_url(self):
+        return None
+
+
 class InvalidTokenRequest(InvalidRequestError):
     def __init__(self, message, parsed_request, oauth_error='invalid_request'):
         super().__init__(message, parsed_request, oauth_error)
