@@ -18,16 +18,19 @@ class Userinfo(object):
     def __contains__(self, item):
         return item in self._db
 
-    def get_claims_for(self, user_id, requested_claims):
+    def get_claims_for(self, user_id, requested_claims, userinfo=None):
         # type: (str, Mapping[str, Optional[Mapping[str, Union[str, List[str]]]]) -> Dict[str, Union[str, List[str]]]
         """
         Filter the userinfo based on which claims where requested.
         :param user_id: user identifier
         :param requested_claims: see <a href="http://openid.net/specs/openid-connect-core-1_0.html#ClaimsParameter">
             "OpenID Connect Core 1.0", Section 5.5</a> for structure
+        :param userinfo: if user_info is specified the claims will be filtered from the user_info directly instead
+        first querying the storage against the user_id
         :return: All requested claims available from the userinfo.
         """
 
-        userinfo = self._db[user_id]
+        if not userinfo:
+            userinfo = self._db[user_id]
         claims = {claim: userinfo[claim] for claim in requested_claims if claim in userinfo}
         return claims

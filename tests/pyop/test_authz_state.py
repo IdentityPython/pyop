@@ -10,6 +10,7 @@ from pyop.authz_state import AccessToken, InvalidScope
 from pyop.authz_state import AuthorizationState
 from pyop.exceptions import InvalidSubjectIdentifier, InvalidAccessToken, InvalidAuthorizationCode, InvalidRefreshToken
 from pyop.subject_identifier import HashBasedSubjectIdentifierFactory
+import pyop.storage
 
 MOCK_TIME = Mock(return_value=time.mktime(dt.datetime(2016, 6, 21).timetuple()))
 INVALID_INPUT = [None, '', 'noexist']
@@ -36,6 +37,10 @@ class TestAuthorizationState(object):
     @pytest.fixture
     def authorization_state(self, authorization_state_factory):
         return authorization_state_factory(refresh_token_lifetime=3600)
+
+    @pytest.fixture
+    def stateless_storage(self):
+        return pyop.storage.StatelessWrapper("pyop", "abc123")
 
     def assert_access_token(self, authorization_request, access_token, access_token_db, iat):
         assert isinstance(access_token, AccessToken)
@@ -71,6 +76,22 @@ class TestAuthorizationState(object):
                authorization_request.to_dict()
         assert authorization_state.authorization_codes[authz_code]['sub'] == self.TEST_SUBJECT_IDENTIFIER
 
+    @patch('time.time', MOCK_TIME)
+    def test_create_authorization_code_with_stateless_storage(self, authorization_state_factory, authorization_request,
+                                                              stateless_storage):
+        code_lifetime = 60 * 2  # two minutes
+        authorization_state = authorization_state_factory(authorization_code_lifetime=code_lifetime,
+                                                          authorization_code_db=stateless_storage)
+        self.set_valid_subject_identifier(authorization_state)
+
+        authz_code = authorization_state.create_authorization_code(authorization_request, self.TEST_SUBJECT_IDENTIFIER)
+        assert authz_code in authorization_state.authorization_codes
+        assert authorization_state.authorization_codes[authz_code]['exp'] == int(time.time()) + code_lifetime
+        assert authorization_state.authorization_codes[authz_code]['used'] is False
+        assert authorization_state.authorization_codes[authz_code][AuthorizationState.KEY_AUTHORIZATION_REQUEST] == \
+               authorization_request.to_dict()
+        assert authorization_state.authorization_codes[authz_code]['sub'] == self.TEST_SUBJECT_IDENTIFIER
+
     def test_create_authorization_code_with_scope_other_than_auth_req(self, authorization_state, authorization_request):
         scope = ['openid', 'extra']
         self.set_valid_subject_identifier(authorization_state)
@@ -91,7 +112,19 @@ class TestAuthorizationState(object):
         self.set_valid_subject_identifier(authorization_state)
 
         access_token = authorization_state.create_access_token(authorization_request, self.TEST_SUBJECT_IDENTIFIER)
-        self.assert_access_token(authorization_request, access_token, authorization_state.access_tokens, MOCK_TIME.return_value)
+        self.assert_access_token(authorization_request, access_token, authorization_state.access_tokens,
+                                 MOCK_TIME.return_value)
+
+    @patch('time.time', MOCK_TIME)
+    def test_create_access_token_with_stateless_storage(self, authorization_state_factory, authorization_request,
+                                                        stateless_storage):
+        authorization_state = authorization_state_factory(access_token_lifetime=self.TEST_TOKEN_LIFETIME,
+                                                          access_token_db=stateless_storage)
+        self.set_valid_subject_identifier(authorization_state)
+
+        access_token = authorization_state.create_access_token(authorization_request, self.TEST_SUBJECT_IDENTIFIER)
+        self.assert_access_token(authorization_request, access_token, authorization_state.access_tokens,
+                                 MOCK_TIME.return_value)
 
     def test_create_access_token_with_scope_other_than_auth_req(self, authorization_state, authorization_request):
         scope = ['openid', 'extra']
@@ -152,6 +185,22 @@ class TestAuthorizationState(object):
         self.assert_access_token(authorization_request, access_token, authorization_state.access_tokens, MOCK_TIME.return_value)
         assert authorization_state.authorization_codes[authz_code]['used'] == True
 
+    @patch('time.time', MOCK_TIME)
+    def test_exchange_code_for_token_with_stateless_storage(self, authorization_state_factory, authorization_request,
+                                                            stateless_storage):
+        authorization_state = authorization_state_factory(access_token_lifetime=self.TEST_TOKEN_LIFETIME,
+                                                          authorization_code_db=stateless_storage,
+                                                          access_token_db=stateless_storage)
+        self.set_valid_subject_identifier(authorization_state)
+
+        authz_code = authorization_state.create_authorization_code(authorization_request, self.TEST_SUBJECT_IDENTIFIER)
+        access_token = authorization_state.exchange_code_for_token(authz_code)
+
+        self.assert_access_token(authorization_request, access_token, authorization_state.access_tokens,
+                                 MOCK_TIME.return_value)
+        assert authorization_state.authorization_codes[authz_code]['sub'] == self.TEST_SUBJECT_IDENTIFIER
+        assert authorization_state.authorization_codes[authz_code]['used'] == False
+
     def test_exchange_code_for_token_with_scope_other_than_auth_req(self, authorization_state,
                                                                     authorization_request):
         scope = ['openid', 'extra']
@@ -188,6 +237,21 @@ class TestAuthorizationState(object):
             authorization_state.exchange_code_for_token(authz_code)  # fail on second use
 
     def test_create_refresh_token(self, authorization_state, authorization_request):
+        self.set_valid_subject_identifier(authorization_state)
+
+        access_token = authorization_state.create_access_token(authorization_request, self.TEST_SUBJECT_IDENTIFIER)
+        refresh_token = authorization_state.create_refresh_token(access_token.value)
+
+        assert refresh_token in authorization_state.refresh_tokens
+        assert authorization_state.refresh_tokens[refresh_token]['access_token'] == access_token.value
+        assert 'exp' in authorization_state.refresh_tokens[refresh_token]
+
+    def test_create_refresh_token_with_stateless_storage(self, authorization_state_factory, authorization_request,
+                                                         stateless_storage):
+        authorization_state = authorization_state_factory(refresh_token_lifetime=3600,
+                                                          authorization_code_db=stateless_storage,
+                                                          access_token_db=stateless_storage,
+                                                          refresh_token_db=stateless_storage)
         self.set_valid_subject_identifier(authorization_state)
 
         access_token = authorization_state.create_access_token(authorization_request, self.TEST_SUBJECT_IDENTIFIER)

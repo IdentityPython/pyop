@@ -1,9 +1,18 @@
 # -*- coding: utf-8 -*-
 
 from abc import ABC, abstractmethod
+from Cryptodome import Random
+from Cryptodome.Cipher import AES
 import copy
 import json
+import base64
+import hashlib
+import logging
 from datetime import datetime
+from urllib.parse import urlparse, parse_qs
+
+logger = logging.getLogger(__name__)
+
 
 try:
     import pymongo
@@ -25,6 +34,10 @@ class StorageBase(ABC):
 
     @abstractmethod
     def __setitem__(self, key, value):
+        pass
+
+    @abstractmethod
+    def pack(self, value):
         pass
 
     @abstractmethod
@@ -53,7 +66,9 @@ class StorageBase(ABC):
 
     @classmethod
     def from_uri(cls, db_uri, collection, db_name=None, ttl=None, **kwargs):
-        if db_uri.startswith("mongodb"):
+        url = urlparse(db_uri)
+
+        if url.scheme == "mongodb":
             return MongoWrapper(
                 db_uri=db_uri,
                 db_name=db_name,
@@ -61,7 +76,7 @@ class StorageBase(ABC):
                 ttl=ttl,
                 extra_options=kwargs,
             )
-        elif db_uri.startswith("redis") or db_uri.startswith("unix"):
+        elif url.scheme == "redis" or url.scheme == "unix":
             return RedisWrapper(
                 db_uri=db_uri,
                 db_name=db_name,
@@ -69,6 +84,26 @@ class StorageBase(ABC):
                 ttl=ttl,
                 extra_options=kwargs,
             )
+        elif url.scheme == "stateless":
+            alg = parse_qs(url.query).get("alg") if url.query else None
+            alg = alg[0] if alg else None
+            return StatelessWrapper(
+                collection=collection,
+                encryption_key=url.password,
+                alg=alg
+            )
+
+        return ValueError(f"Invalid DB URI: {db_uri}")
+
+    @classmethod
+    def type(cls, db_uri):
+        url = urlparse(db_uri)
+        if url.scheme == "mongodb":
+            return "mongodb"
+        elif url.scheme == "redis" or url.scheme == "unix":
+            return "redis"
+        elif url.scheme == "stateless":
+            return "stateless"
 
         return ValueError(f"Invalid DB URI: {db_uri}")
 
@@ -111,6 +146,9 @@ class MongoWrapper(StorageBase):
             'last_modified': datetime.utcnow()
         }
         self._coll.replace_one({'lookup_key': key}, doc, upsert=True)
+
+    def pack(self, value):
+        raise NotImplementedError
 
     def __getitem__(self, key):
         doc = self._coll.find_one({'lookup_key': key})
@@ -168,6 +206,9 @@ class RedisWrapper(StorageBase):
         encoded = json.dumps({ "value": value })
         self._db.set(self._make_key(key), encoded, ex=self.ttl)
 
+    def pack(self, value):
+        raise NotImplementedError
+
     def __getitem__(self, key):
         encoded = self._db.get(self._make_key(key))
         if encoded is None:
@@ -192,6 +233,122 @@ class RedisWrapper(StorageBase):
                 yield (visible_key, self[visible_key])
             except KeyError:
                 pass
+
+
+class StatelessWrapper(StorageBase):
+    def __init__(self, collection, encryption_key, alg=None):
+        self.collection = collection
+        if not alg or alg.lower() == "aes256":
+            self.cipher = _AESCipher(encryption_key)
+        else:
+            return ValueError(f"Invalid encryption algorithm: {alg}")
+
+    def __setitem__(self, key, value):
+        pass
+
+    def pack(self, value):
+        key = None
+        if value:
+            if isinstance(value, dict):
+                value = json.dumps(value)
+            key = self.cipher.encrypt(value.encode("UTF-8")).decode("UTF-8")
+        return key
+
+    def __getitem__(self, key):
+        return self._unpack(key)
+
+    def __delitem__(self, key):
+        raise NotImplementedError
+
+    def __contains__(self, key):
+        if self._unpack(key):
+            return True
+        return False
+
+    def items(self):
+        raise NotImplementedError
+
+    def _unpack(self, value):
+        unpacked_val = None
+        try:
+            if value:
+                unpacked_val = self.cipher.decrypt(value.encode("UTF-8")).decode("UTF-8")
+                unpacked_val = json.loads(unpacked_val)
+        except ValueError:
+            if unpacked_val:
+                logger.debug("Value '%s' is not a dict", value)
+            else:
+                logger.warning("Value '%s' is invalid for %s", value, self.collection)
+        return unpacked_val
+
+
+class _AESCipher(object):
+    """
+    This class will perform AES encryption/decryption with a keylength of 256.
+
+    @see: http://stackoverflow.com/questions/12524994/encrypt-decrypt-using-pycrypto-aes-256
+    """
+
+    def __init__(self, key):
+        """
+        Constructor
+
+        :type key: str
+
+        :param key: The key used for encryption and decryption. The longer key the better.
+        """
+        self.bs = 32
+        self.key = hashlib.sha256(key.encode()).digest()
+
+    def encrypt(self, raw):
+        """
+        Encryptes the parameter raw.
+
+        :type raw: bytes
+        :rtype: str
+
+        :param: bytes to be encrypted.
+
+        :return: A base 64 encoded string.
+        """
+        raw = self._pad(raw)
+        iv = Random.new().read(AES.block_size)
+        cipher = AES.new(self.key, AES.MODE_CBC, iv)
+        return base64.urlsafe_b64encode(iv + cipher.encrypt(raw))
+
+    def decrypt(self, enc):
+        """
+        Decryptes the parameter enc.
+
+        :type enc: bytes
+        :rtype: bytes
+
+        :param: The value to be decrypted.
+        :return: The decrypted value.
+        """
+        enc = base64.urlsafe_b64decode(enc)
+        iv = enc[:AES.block_size]
+        cipher = AES.new(self.key, AES.MODE_CBC, iv)
+        return self._unpad(cipher.decrypt(enc[AES.block_size:]))
+
+    def _pad(self, b):
+        """
+        Will padd the param to be of the correct length for the encryption alg.
+
+        :type b: bytes
+        :rtype: bytes
+        """
+        return b + (self.bs - len(b) % self.bs) * chr(self.bs - len(b) % self.bs).encode("UTF-8")
+
+    @staticmethod
+    def _unpad(b):
+        """
+        Removes the padding performed by the method _pad.
+
+        :type b: bytes
+        :rtype: bytes
+        """
+        return b[:-ord(b[len(b) - 1:])]
 
 
 class MongoDB(object):

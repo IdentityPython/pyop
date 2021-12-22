@@ -11,6 +11,7 @@ from .exceptions import InvalidAuthorizationCode
 from .exceptions import InvalidRefreshToken
 from .exceptions import InvalidScope
 from .exceptions import InvalidSubjectIdentifier
+from .storage import StatelessWrapper
 from .util import requested_scope_is_allowed
 
 logger = logging.getLogger(__name__)
@@ -24,13 +25,15 @@ def rand_str():
 
 class AuthorizationState(object):
     KEY_AUTHORIZATION_REQUEST = 'auth_req'
+    KEY_USER_INFO = 'user_info'
+    KEY_EXTRA_ID_TOKEN_CLAIMS = 'extra_id_token_claims'
 
     def __init__(self, subject_identifier_factory, authorization_code_db=None, access_token_db=None,
                  refresh_token_db=None, subject_identifier_db=None, *,
                  authorization_code_lifetime=600, access_token_lifetime=3600, refresh_token_lifetime=None,
                  refresh_token_threshold=None):
         # type: (se_leg_op.token_state.SubjectIdentifierFactory, Mapping[str, Any], Mapping[str, Any],
-        #        Mapping[str, Any], Mapping[str, Any], int, int, Optional[int], Optional[int]) -> None
+        # Mapping[str, Any], Mapping[str, Any], int, int, Optional[int], Optional[int]) -> None
         """
         :param subject_identifier_factory: callable to use when construction subject identifiers
         :param authorization_code_db: database for storing authorization codes, defaults to in-memory
@@ -77,10 +80,18 @@ class AuthorizationState(object):
         """
         Mapping of user id's to subject identifiers.
         """
-        self.subject_identifiers = subject_identifier_db if subject_identifier_db is not None else {}
+        if isinstance(self.authorization_codes, StatelessWrapper) or \
+                isinstance(self.access_tokens, StatelessWrapper) or isinstance(
+                self.refresh_tokens, StatelessWrapper):
+            self.stateless = True
+            self.subject_identifiers = {}
+        else:
+            self.stateless = False
+            self.subject_identifiers = subject_identifier_db if subject_identifier_db is not None else {}
 
-    def create_authorization_code(self, authorization_request, subject_identifier, scope=None):
-        # type: (AuthorizationRequest, str, Optional[List[str]]) -> str
+    def create_authorization_code(self, authorization_request, subject_identifier, scope=None, user_info=None,
+                                  extra_id_token_claims=None):
+        # type: (AuthorizationRequest, str, Optional[List[str]], Optional[dict], Optional[Mappings[str, Union[str, List[str]]]]) -> str
         """
         Creates an authorization code bound to the authorization request and the authenticated user identified
         by the subject identifier.
@@ -92,7 +103,6 @@ class AuthorizationState(object):
         scope = ' '.join(scope or authorization_request['scope'])
         logger.debug('creating authz code for scope=%s', scope)
 
-        authorization_code = rand_str()
         authz_info = {
             'used': False,
             'exp': int(time.time()) + self.authorization_code_lifetime,
@@ -100,13 +110,22 @@ class AuthorizationState(object):
             'granted_scope': scope,
             self.KEY_AUTHORIZATION_REQUEST: authorization_request.to_dict()
         }
-        self.authorization_codes[authorization_code] = authz_info
+
+        if isinstance(self.authorization_codes, StatelessWrapper):
+            if user_info:
+                authz_info[self.KEY_USER_INFO] = user_info
+            authz_info[self.KEY_EXTRA_ID_TOKEN_CLAIMS] = extra_id_token_claims or {}
+            authorization_code = self.authorization_codes.pack(authz_info)
+        else:
+            authorization_code = rand_str()
+            self.authorization_codes[authorization_code] = authz_info
+
         logger.debug('new authz_code=%s to client_id=%s for sub=%s valid_until=%s', authorization_code,
                      authorization_request['client_id'], subject_identifier, authz_info['exp'])
         return authorization_code
 
-    def create_access_token(self, authorization_request, subject_identifier, scope=None):
-        # type: (AuthorizationRequest, str, Optional[List[str]]) -> se_leg_op.access_token.AccessToken
+    def create_access_token(self, authorization_request, subject_identifier, scope=None, user_info=None):
+        # type: (AuthorizationRequest, str, Optional[List[str]], Optional[dict]) -> se_leg_op.access_token.AccessToken
         """
         Creates an access token bound to the authentication request and the authenticated user identified by the
         subject identifier.
@@ -116,15 +135,15 @@ class AuthorizationState(object):
 
         scope = scope or authorization_request['scope']
 
-        return self._create_access_token(subject_identifier, authorization_request.to_dict(), ' '.join(scope))
+        return self._create_access_token(subject_identifier, authorization_request.to_dict(), ' '.join(scope),
+                                         user_info=user_info)
 
-    def _create_access_token(self, subject_identifier, auth_req, granted_scope, current_scope=None):
-        # type: (str, Mapping[str, Union[str, List[str]]], str, Optional[str]) -> se_leg_op.access_token.AccessToken
+    def _create_access_token(self, subject_identifier, auth_req, granted_scope, current_scope=None,
+                             user_info=None):
+        # type: (str, Mapping[str, Union[str, List[str]]], str, Optional[str], Optional[dict]) -> se_leg_op.access_token.AccessToken
         """
         Creates an access token bound to the subject identifier, client id and requested scope.
         """
-        access_token = AccessToken(rand_str(), self.access_token_lifetime)
-
         scope = current_scope or granted_scope
         logger.debug('creating access token for scope=%s', scope)
 
@@ -136,13 +155,21 @@ class AuthorizationState(object):
             'aud': [auth_req['client_id']],
             'scope': scope,
             'granted_scope': granted_scope,
-            'token_type': access_token.BEARER_TOKEN_TYPE,
+            'token_type': AccessToken.BEARER_TOKEN_TYPE,
             self.KEY_AUTHORIZATION_REQUEST: auth_req
         }
-        self.access_tokens[access_token.value] = authz_info
+
+        if isinstance(self.access_tokens, StatelessWrapper):
+            if user_info:
+                authz_info[self.KEY_USER_INFO] = user_info
+            access_token_val = self.access_tokens.pack(authz_info)
+        else:
+            access_token_val = rand_str()
+            self.access_tokens[access_token_val] = authz_info
 
         logger.debug('new access_token=%s to client_id=%s for sub=%s valid_until=%s',
-                     access_token.value, auth_req['client_id'], subject_identifier, authz_info['exp'])
+                     access_token_val, auth_req['client_id'], subject_identifier, authz_info['exp'])
+        access_token = AccessToken(access_token_val, self.access_token_lifetime)
         return access_token
 
     def exchange_code_for_token(self, authorization_code):
@@ -165,7 +192,8 @@ class AuthorizationState(object):
         authz_info['used'] = True
 
         access_token = self._create_access_token(authz_info['sub'], authz_info[self.KEY_AUTHORIZATION_REQUEST],
-                                                 authz_info['granted_scope'])
+                                                 authz_info['granted_scope'],
+                                                 user_info=authz_info.get(self.KEY_USER_INFO))
 
         logger.debug('authz_code=%s exchanged to access_token=%s', authorization_code, access_token.value)
         return access_token
@@ -199,9 +227,13 @@ class AuthorizationState(object):
             logger.debug('no refresh token issued for for access_token=%s', access_token_value)
             return None
 
-        refresh_token = rand_str()
         authz_info = {'access_token': access_token_value, 'exp': int(time.time()) + self.refresh_token_lifetime}
-        self.refresh_tokens[refresh_token] = authz_info
+
+        if isinstance(self.refresh_tokens, StatelessWrapper):
+            refresh_token = self.refresh_tokens.pack(authz_info)
+        else:
+            refresh_token = rand_str()
+            self.refresh_tokens[refresh_token] = authz_info
 
         logger.debug('issued refresh_token=%s expiring=%d for access_token=%s', refresh_token, authz_info['exp'],
                      access_token_value)
@@ -235,7 +267,8 @@ class AuthorizationState(object):
             scope = authz_info['granted_scope']
 
         new_access_token = self._create_access_token(authz_info['sub'], authz_info[self.KEY_AUTHORIZATION_REQUEST],
-                                                     authz_info['granted_scope'], scope)
+                                                     authz_info['granted_scope'], scope,
+                                                     user_info=authz_info.get(self.KEY_USER_INFO))
 
         new_refresh_token = None
         if self.refresh_token_threshold \
@@ -313,6 +346,27 @@ class AuthorizationState(object):
                 return user_id
 
         raise InvalidSubjectIdentifier('{} unknown'.format(subject_identifier))
+
+    def get_user_info_for_code(self, authorization_code):
+        # type: (str) -> dict
+        if authorization_code not in self.authorization_codes:
+            raise InvalidAuthorizationCode('{} unknown'.format(authorization_code))
+
+        return self.authorization_codes[authorization_code].get(self.KEY_USER_INFO)
+
+    def get_extra_io_token_claims_for_code(self, authorization_code):
+        # type: (str) -> dict
+        if authorization_code not in self.authorization_codes:
+            raise InvalidAuthorizationCode('{} unknown'.format(authorization_code))
+
+        return self.authorization_codes[authorization_code].get(self.KEY_EXTRA_ID_TOKEN_CLAIMS)
+
+    def get_user_info_for_access_token(self, access_token):
+        # type: (str) -> dict
+        if access_token not in self.access_tokens:
+            raise InvalidAccessToken('{} unknown'.format(access_token))
+
+        return self.access_tokens[access_token].get(self.KEY_USER_INFO)
 
     def get_authorization_request_for_code(self, authorization_code):
         # type: (str) -> AuthorizationRequest

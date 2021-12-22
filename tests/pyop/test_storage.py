@@ -195,3 +195,40 @@ class TestMongoTTL(StorageTTLTest):
         with pytest.raises(ImportError):
             self.prepare_db("mongodb://localhost/0", None)
         pyop.storage._has_pymongo = True
+
+
+class TestStatelessWrapper(object):
+    @pytest.fixture
+    def db(self):
+        return pyop.storage.StatelessWrapper("pyop", "abc123")
+
+    def test_write(self, db):
+        db['foo'] = 'bar'
+        assert db['foo'] is None
+
+    def test_pack_and_unpack(self, db):
+        val_1 = {'foo': 'bar'}
+        key = db.pack(val_1)
+        val_2 = db[key]
+        assert val_1 == val_2
+
+    def test_pack_with_non_dict_val(self, db):
+        val_1 = 'this is not a dict'
+        key = db.pack(val_1)
+        val_2 = db[key]
+        assert val_1 == val_2
+
+    def test_contains(self, db):
+        val_1 = {'foo': 'bar'}
+        key = db.pack(val_1)
+        assert key in db
+
+    def test_items(self, db):
+        with pytest.raises(NotImplementedError):
+            db['foo'] = 'bar'
+            db.items()
+
+    def test_delitem(self, db):
+        with pytest.raises(NotImplementedError):
+            db['foo'] = 'bar'
+            del db['foo']
