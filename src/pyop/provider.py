@@ -79,11 +79,7 @@ class Provider(object):
         self.configuration_information.verify()
 
         self.authz_state = authz_state
-
-        if self.authz_state and self.authz_state.stateless:
-            self.stateless = True
-        else:
-            self.stateless = False
+        self.stateless = self.authz_state and self.authz_state.stateless
 
         self.clients = clients
         self.userinfo = userinfo
@@ -611,7 +607,7 @@ class Provider(object):
     def logout_user(self, subject_identifier=None, end_session_request=None):
         # type: (Optional[str], Optional[oic.oic.message.EndSessionRequest]) -> None
         if self.stateless:
-            raise OAuthError("logout user isn't supported with stateless provider", "invalid_request")
+            raise OAuthError("Logout is not supported with stateless storage provider", "invalid_request")
         if not end_session_request:
             end_session_request = EndSessionRequest()
         if 'id_token_hint' in end_session_request:

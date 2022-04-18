@@ -80,17 +80,27 @@ class AuthorizationState(object):
         """
         Mapping of user id's to subject identifiers.
         """
-        if isinstance(self.authorization_codes, StatelessWrapper) or \
-                isinstance(self.access_tokens, StatelessWrapper) or isinstance(
-                self.refresh_tokens, StatelessWrapper):
-            self.stateless = True
-            self.subject_identifiers = {}
-        else:
-            self.stateless = False
-            self.subject_identifiers = subject_identifier_db if subject_identifier_db is not None else {}
+        self.stateless = (
+            isinstance(self.authorization_codes, StatelessWrapper)
+            or isinstance(self.access_tokens, StatelessWrapper)
+            or isinstance(self.refresh_tokens, StatelessWrapper)
+        )
+        self.subject_identifiers = (
+            {}
+            if self.stateless
+            else subject_identifier_db
+            if subject_identifier_db is not None
+            else {}
+        )
 
-    def create_authorization_code(self, authorization_request, subject_identifier, scope=None, user_info=None,
-                                  extra_id_token_claims=None):
+    def create_authorization_code(
+        self,
+        authorization_request,
+        subject_identifier,
+        scope=None,
+        user_info=None,
+        extra_id_token_claims=None,
+    ):
         # type: (AuthorizationRequest, str, Optional[List[str]], Optional[dict], Optional[Mappings[str, Union[str, List[str]]]]) -> str
         """
         Creates an authorization code bound to the authorization request and the authenticated user identified
@@ -111,7 +121,7 @@ class AuthorizationState(object):
             self.KEY_AUTHORIZATION_REQUEST: authorization_request.to_dict()
         }
 
-        if isinstance(self.authorization_codes, StatelessWrapper):
+        if self.stateless:
             if user_info:
                 authz_info[self.KEY_USER_INFO] = user_info
             authz_info[self.KEY_EXTRA_ID_TOKEN_CLAIMS] = extra_id_token_claims or {}
@@ -159,7 +169,7 @@ class AuthorizationState(object):
             self.KEY_AUTHORIZATION_REQUEST: auth_req
         }
 
-        if isinstance(self.access_tokens, StatelessWrapper):
+        if self.stateless:
             if user_info:
                 authz_info[self.KEY_USER_INFO] = user_info
             access_token_val = self.access_tokens.pack(authz_info)
@@ -229,7 +239,7 @@ class AuthorizationState(object):
 
         authz_info = {'access_token': access_token_value, 'exp': int(time.time()) + self.refresh_token_lifetime}
 
-        if isinstance(self.refresh_tokens, StatelessWrapper):
+        if self.stateless:
             refresh_token = self.refresh_tokens.pack(authz_info)
         else:
             refresh_token = rand_str()
@@ -326,7 +336,7 @@ class AuthorizationState(object):
         raise ValueError('Unknown subject_type={}'.format(subject_type))
 
     def _is_valid_subject_identifier(self, sub):
-        # type: (str) -> str
+        # type: (str) -> bool
         """
         Determines whether the subject identifier is known.
         """
@@ -340,8 +350,7 @@ class AuthorizationState(object):
     def get_user_id_for_subject_identifier(self, subject_identifier):
         for user_id, subject_identifiers in self.subject_identifiers.items():
             is_public_sub = 'public' in subject_identifiers and subject_identifier == subject_identifiers['public']
-            is_pairwise_sub = 'pairwise' in subject_identifiers and subject_identifier in subject_identifiers[
-                'pairwise']
+            is_pairwise_sub = 'pairwise' in subject_identifiers and subject_identifier in subject_identifiers['pairwise']
             if is_public_sub or is_pairwise_sub:
                 return user_id
 
@@ -377,7 +386,7 @@ class AuthorizationState(object):
             self.authorization_codes[authorization_code][self.KEY_AUTHORIZATION_REQUEST])
 
     def get_authorization_request_for_access_token(self, access_token_value):
-        # type: (str) -> 
+        # type: (str) ->
         if access_token_value not in self.access_tokens:
             raise InvalidAccessToken('{} unknown'.format(access_token_value))
 
