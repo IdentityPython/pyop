@@ -31,6 +31,7 @@ from .exceptions import AuthorizationError
 from .exceptions import InvalidAccessToken
 from .exceptions import InvalidTokenRequest
 from .exceptions import InvalidAuthorizationCode
+from .exceptions import OAuthError
 from .request_validator import authorization_request_verify
 from .request_validator import client_id_is_known
 from .request_validator import client_preferences_match_provider_capabilities
@@ -78,6 +79,8 @@ class Provider(object):
         self.configuration_information.verify()
 
         self.authz_state = authz_state
+        self.stateless = self.authz_state and self.authz_state.stateless
+
         self.clients = clients
         self.userinfo = userinfo
         self.id_token_lifetime = id_token_lifetime
@@ -131,11 +134,12 @@ class Provider(object):
         logger.debug('parsed authentication_request: %s', auth_req)
         return auth_req
 
-    def authorize(self, authentication_request,  # type: AuthorizationRequest
-                  user_id,  # type: str
-                  extra_id_token_claims=None
-                  # type: Optional[Union[Mapping[str, Union[str, List[str]]], Callable[[str, str], Mapping[str, Union[str, List[str]]]]]
-                  ):
+    def authorize(
+        self,
+        authentication_request,  # type: AuthorizationRequest
+        user_id,  # type: str
+        extra_id_token_claims=None,  # type: Optional[Union[Mapping[str, Union[str, List[str]]], Callable[[str, str], Mapping[str, Union[str, List[str]]]]]
+    ):
         # type: (...) -> oic.oic.message.AuthorizationResponse
         """
         Creates an Authentication Response for the specified authentication request and local identifier of the
@@ -146,29 +150,42 @@ class Provider(object):
             self.authz_state.subject_identifiers[user_id] = {'public': custom_sub}
             sub = custom_sub
         else:
-            sub = self._create_subject_identifier(user_id, authentication_request['client_id'],
-                                                  authentication_request['redirect_uri'])
+            sub = self._create_subject_identifier(
+                user_id,
+                authentication_request['client_id'],
+                authentication_request['redirect_uri'],
+            )
 
         self._check_subject_identifier_matches_requested(authentication_request, sub)
+
+        if extra_id_token_claims is None:
+            extra_id_token_claims = {}
+        elif callable(extra_id_token_claims):
+            extra_id_token_claims = extra_id_token_claims(
+                user_id, authentication_request['client_id']
+            )
+
         response = AuthorizationResponse()
 
         authz_code = None
         if 'code' in authentication_request['response_type']:
-            authz_code = self.authz_state.create_authorization_code(authentication_request, sub)
+            authz_code = self.authz_state.create_authorization_code(
+                authentication_request,
+                sub,
+                user_info=self.userinfo[user_id],
+                extra_id_token_claims=extra_id_token_claims,
+            )
             response['code'] = authz_code
 
         access_token_value = None
         if 'token' in authentication_request['response_type']:
-            access_token = self.authz_state.create_access_token(authentication_request, sub)
+            access_token = self.authz_state.create_access_token(
+                authentication_request, sub, user_info=self.userinfo[user_id]
+            )
             access_token_value = access_token.value
             self._add_access_token_to_response(response, access_token)
 
         if 'id_token' in authentication_request['response_type']:
-            if extra_id_token_claims is None:
-                extra_id_token_claims = {}
-            elif callable(extra_id_token_claims):
-                extra_id_token_claims = extra_id_token_claims(user_id, authentication_request['client_id'])
-
             requested_claims = self._get_requested_claims_in(authentication_request, 'id_token')
             if len(authentication_request['response_type']) == 1:
                 # only id token is issued -> no way of doing userinfo request, so include all claims in ID Token,
@@ -180,12 +197,22 @@ class Provider(object):
                 )
 
             user_claims = self.userinfo.get_claims_for(user_id, requested_claims)
-            response['id_token'] = self._create_signed_id_token(authentication_request['client_id'], sub,
-                                                                user_claims,
-                                                                authentication_request.get('nonce'),
-                                                                authz_code, access_token_value, extra_id_token_claims)
-            logger.debug('issued id_token=%s from requested_claims=%s userinfo=%s extra_claims=%s',
-                         response['id_token'], requested_claims, user_claims, extra_id_token_claims)
+            response['id_token'] = self._create_signed_id_token(
+                authentication_request['client_id'],
+                sub,
+                user_claims,
+                authentication_request.get('nonce'),
+                authz_code,
+                access_token_value,
+                extra_id_token_claims,
+            )
+            logger.debug(
+                'issued id_token=%s from requested_claims=%s userinfo=%s extra_claims=%s',
+                response['id_token'],
+                requested_claims,
+                user_claims,
+                extra_id_token_claims,
+            )
 
         if 'state' in authentication_request:
             response['state'] = authentication_request['state']
@@ -329,7 +356,7 @@ class Provider(object):
         raise InvalidTokenRequest('grant_type \'{}\' unknown'.format(token_request['grant_type']), token_request,
                                   oauth_error='unsupported_grant_type')
 
-    def _PKCE_verify(self, 
+    def _PKCE_verify(self,
                      token_request, # type: AccessTokenRequest
                      authentication_request # type: AuthorizationRequest
                     ):
@@ -347,15 +374,15 @@ class Provider(object):
             return False
 
         if not 'code_challenge_method' in authentication_request:
-            raise InvalidTokenRequest("A code_challenge and code_verifier have been supplied" 
+            raise InvalidTokenRequest("A code_challenge and code_verifier have been supplied"
                                       "but missing code_challenge_method in authentication_request", token_request)
 
-        # OIC Provider extension returns either a boolean or Response object containing an error. To support 
+        # OIC Provider extension returns either a boolean or Response object containing an error. To support
         # stricter typing guidelines, return if True. Error handling support should be in encapsulating function.
-        return OICProviderExtensions.verify_code_challenge(token_request['code_verifier'], 
+        return OICProviderExtensions.verify_code_challenge(token_request['code_verifier'],
                                                            authentication_request['code_challenge'], authentication_request['code_challenge_method']) == True
 
-    def _verify_code_exchange_req(self, 
+    def _verify_code_exchange_req(self,
                                   token_request, # type: AccessTokenRequest
                                   authentication_request # type: AuthorizationRequest
                                   ):
@@ -367,7 +394,7 @@ class Provider(object):
 
         :param token_request: The request asking for a token given a code, and optionally a code_verifier
         :param authentication_request: The authentication request belonging to the provided code.
-        :raises InvalidTokenRequest, InvalidAuthorizationCode: If request is invalid, throw a representing exception. 
+        :raises InvalidTokenRequest, InvalidAuthorizationCode: If request is invalid, throw a representing exception.
         """
         if token_request['client_id'] != authentication_request['client_id']:
             logger.info('Authorization code \'%s\' belonging to \'%s\' was used by \'%s\'',
@@ -407,7 +434,8 @@ class Provider(object):
         self._verify_code_exchange_req(token_request, authentication_request)
 
         sub = self.authz_state.get_subject_identifier_for_code(token_request['code'])
-        user_id = self.authz_state.get_user_id_for_subject_identifier(sub)
+        if not self.stateless:
+            user_id = self.authz_state.get_user_id_for_subject_identifier(sub)
 
         response = AccessTokenResponse()
 
@@ -420,9 +448,19 @@ class Provider(object):
         if extra_id_token_claims is None:
             extra_id_token_claims = {}
         elif callable(extra_id_token_claims):
-            extra_id_token_claims = extra_id_token_claims(user_id, authentication_request['client_id'])
+            if self.stateless:
+                extra_id_token_claims = extra_id_token_claims(sub, authentication_request['client_id'])
+            else:
+                extra_id_token_claims = extra_id_token_claims(user_id, authentication_request['client_id'])
+        if self.stateless:
+            extra_id_token_claims_in_code = self.authz_state.get_extra_io_token_claims_for_code(token_request['code'])
+            extra_id_token_claims.update(extra_id_token_claims_in_code)
         requested_claims = self._get_requested_claims_in(authentication_request, 'id_token')
-        user_claims = self.userinfo.get_claims_for(user_id, requested_claims)
+        if self.stateless:
+            user_info = self.authz_state.get_user_info_for_code(token_request['code'])
+            user_claims = self.userinfo.get_claims_for(None, requested_claims, user_info)
+        else:
+            user_claims = self.userinfo.get_claims_for(user_id, requested_claims)
         response['id_token'] = self._create_signed_id_token(authentication_request['client_id'], sub,
                                                             user_claims,
                                                             authentication_request.get('nonce'),
@@ -487,12 +525,19 @@ class Provider(object):
         if not introspection['active']:
             raise InvalidAccessToken('The access token has expired')
         scopes = introspection['scope'].split()
-        user_id = self.authz_state.get_user_id_for_subject_identifier(introspection['sub'])
+
+        if not self.stateless:
+            user_id = self.authz_state.get_user_id_for_subject_identifier(introspection['sub'])
 
         requested_claims = scope2claims(scopes, extra_scope_dict=self.extra_scopes)
         authentication_request = self.authz_state.get_authorization_request_for_access_token(bearer_token)
         requested_claims.update(self._get_requested_claims_in(authentication_request, 'userinfo'))
-        user_claims = self.userinfo.get_claims_for(user_id, requested_claims)
+
+        if self.stateless:
+            user_info = self.authz_state.get_user_info_for_access_token(bearer_token)
+            user_claims = self.userinfo.get_claims_for(None, requested_claims, user_info)
+        else:
+            user_claims = self.userinfo.get_claims_for(user_id, requested_claims)
 
         user_claims.setdefault('sub', introspection['sub'])
         response = OpenIDSchema(**user_claims)
@@ -561,6 +606,8 @@ class Provider(object):
 
     def logout_user(self, subject_identifier=None, end_session_request=None):
         # type: (Optional[str], Optional[oic.oic.message.EndSessionRequest]) -> None
+        if self.stateless:
+            raise OAuthError("Logout is not supported with stateless storage provider", "invalid_request")
         if not end_session_request:
             end_session_request = EndSessionRequest()
         if 'id_token_hint' in end_session_request:
