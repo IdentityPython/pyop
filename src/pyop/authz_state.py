@@ -363,7 +363,7 @@ class AuthorizationState(object):
 
         return self.authorization_codes[authorization_code].get(self.KEY_USER_INFO)
 
-    def get_extra_io_token_claims_for_code(self, authorization_code):
+    def get_extra_id_token_claims_for_code(self, authorization_code):
         # type: (str) -> dict
         if authorization_code not in self.authorization_codes:
             raise InvalidAuthorizationCode('{} unknown'.format(authorization_code))
