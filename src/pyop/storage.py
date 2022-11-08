@@ -93,7 +93,7 @@ class StorageBase(ABC):
                 alg=alg
             )
 
-        return ValueError(f"Invalid DB URI: {db_uri}")
+        raise ValueError(f"Invalid DB URI: {db_uri}")
 
     @classmethod
     def type(cls, db_uri):
@@ -105,7 +105,7 @@ class StorageBase(ABC):
         elif url.scheme == "stateless":
             return "stateless"
 
-        return ValueError(f"Invalid DB URI: {db_uri}")
+        raise ValueError(f"Invalid DB URI: {db_uri}")
 
     @property
     def ttl(self):
