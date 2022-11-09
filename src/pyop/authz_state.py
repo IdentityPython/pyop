@@ -200,6 +200,7 @@ class AuthorizationState(object):
             raise InvalidAuthorizationCode('{} has expired'.format(authorization_code))
 
         authz_info['used'] = True
+        self.authorization_codes[authorization_code] = authz_info
 
         access_token = self._create_access_token(authz_info['sub'], authz_info[self.KEY_AUTHORIZATION_REQUEST],
                                                  authz_info['granted_scope'],
