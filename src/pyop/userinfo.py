@@ -31,6 +31,6 @@ class Userinfo(object):
         """
 
         if not userinfo:
-            userinfo = self._db[user_id]
+            userinfo = self._db[user_id] if user_id else {}
         claims = {claim: userinfo[claim] for claim in requested_claims if claim in userinfo}
         return claims
