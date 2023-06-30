@@ -240,7 +240,8 @@ class Provider(object):
         """
         supported_subject_types = self.configuration_information['subject_types_supported'][0]
         subject_type = self.clients[client_id].get('subject_type', supported_subject_types)
-        sector_identifier = urlparse(redirect_uri).netloc
+        sector_identifier_uri = self.clients[client_id].get('sector_identifier_uri', redirect_uri)
+        sector_identifier = urlparse(sector_identifier_uri).netloc
         return self.authz_state.get_subject_identifier(subject_type, user_id, sector_identifier)
 
     def _get_requested_claims_in(self, authentication_request, response_method):
