@@ -15,7 +15,7 @@ setup(
         'pycryptodomex',
     ],
     extras_require={
-        'mongo': 'pymongo',
+        'mongo': 'pymongo >= 3.12, < 4.0',
         'redis': 'redis',
     },
 )
