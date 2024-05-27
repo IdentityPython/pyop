@@ -445,16 +445,13 @@ class Provider(object):
         if refresh_token is not None:
             response['refresh_token'] = refresh_token
 
-        if extra_id_token_claims is None:
-            extra_id_token_claims = {}
-        elif callable(extra_id_token_claims):
-            if self.stateless:
-                extra_id_token_claims = extra_id_token_claims(sub, authentication_request['client_id'])
-            else:
-                extra_id_token_claims = extra_id_token_claims(user_id, authentication_request['client_id'])
+        extra_id_token_claims = {}
         if self.stateless:
             extra_id_token_claims_in_code = self.authz_state.get_extra_io_token_claims_for_code(token_request['code'])
             extra_id_token_claims.update(extra_id_token_claims_in_code)
+        elif callable(extra_id_token_claims):
+            extra_id_token_claims = extra_id_token_claims(user_id, authentication_request['client_id'])
+        
         requested_claims = self._get_requested_claims_in(authentication_request, 'id_token')
         if self.stateless:
             user_info = self.authz_state.get_user_info_for_code(token_request['code'])
