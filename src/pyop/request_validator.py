@@ -5,6 +5,7 @@ from oic.oic import PREFERENCE2PROVIDER
 
 from .exceptions import InvalidClientRegistrationRequest
 from .exceptions import InvalidAuthenticationRequest
+from .exceptions import UnknownClientId
 from .exceptions import InvalidRedirectURI
 from .util import is_allowed_response_type, find_common_values
 
@@ -32,7 +33,7 @@ def client_id_is_known(provider, authentication_request):
     """
     if authentication_request['client_id'] not in provider.clients:
         logger.error('Unknown client_id \'{}\''.format(authentication_request['client_id']))
-        raise InvalidAuthenticationRequest('Unknown client_id',
+        raise UnknownClientId('Unknown client_id',
                                            authentication_request,
                                            oauth_error='unauthorized_client')
 
