@@ -59,6 +59,11 @@ class InvalidAuthenticationRequest(InvalidRequestError):
         return None
 
 
+class UnknownClientId(InvalidAuthenticationRequest):
+    def to_error_url(self):
+        return None
+
+
 class InvalidRedirectURI(InvalidAuthenticationRequest):
     def to_error_url(self):
         return None
