@@ -446,7 +446,9 @@ class Provider(object):
         if refresh_token is not None:
             response['refresh_token'] = refresh_token
 
-        extra_id_token_claims = {}
+        if extra_id_token_claims is None:
+            extra_id_token_claims = {}
+
         if self.stateless:
             extra_id_token_claims_in_code = self.authz_state.get_extra_id_token_claims_for_code(token_request['code'])
             extra_id_token_claims.update(extra_id_token_claims_in_code)
