@@ -3,6 +3,7 @@ import functools
 import logging
 import time
 import uuid
+from typing import Any, Callable, Dict, List, Mapping, Optional, Union
 from urllib.parse import parse_qsl
 from urllib.parse import urlparse
 
@@ -49,14 +50,14 @@ class Provider(object):
     def __init__(self, signing_key, configuration_information, authz_state, clients, userinfo, *,
                  id_token_lifetime=3600, extra_scopes=None):
         # type: (jwkest.jwk.Key, Dict[str, Union[str, Sequence[str]]], se_leg_op.authz_state.AuthorizationState,
-        #        Mapping[str, Mapping[str, Any]], se_leg_op.userinfo.Userinfo, int) -> None
+        #        Union[Mapping[str, Mapping[str, Any]], Callable[[], Mapping[str, Mapping[str, Any]]]], se_leg_op.userinfo.Userinfo, int) -> None
         """
         Creates a new provider instance.
         :param configuration_information: see
             <a href="https://openid.net/specs/openid-connect-discovery-1_0.html#ProviderMetadata">
             "OpenID Connect Discovery 1.0", Section 3</a>
         :param clients: see <a href="https://openid.net/specs/openid-connect-registration-1_0.html#ClientMetadata">
-            "OpenID Connect Dynamic Client Registration 1.0", Section 2</a>
+            "OpenID Connect Dynamic Client Registration 1.0", Section 2</a> or a callable that returns such a mapping
         :param userinfo: read-only interface for user info
         :param id_token_lifetime: how long the signed ID Tokens should be valid (in seconds), defaults to 1 hour
         """
@@ -81,7 +82,7 @@ class Provider(object):
         self.authz_state = authz_state
         self.stateless = self.authz_state and self.authz_state.stateless
 
-        self.clients = clients
+        self._clients = clients  # type: Union[Dict[str, Dict[str, Any]], Callable[[], Dict[str, Dict[str, Any]]]]
         self.userinfo = userinfo
         self.id_token_lifetime = id_token_lifetime
 
@@ -100,6 +101,16 @@ class Provider(object):
         self.registration_request_validators.append(registration_request_verify)
         self.registration_request_validators.append(
             functools.partial(client_preferences_match_provider_capabilities, self))
+
+    @property
+    def clients(self) -> Dict[str, Dict[str, Any]]:
+        if callable(self._clients):
+            return self._clients()
+        return self._clients
+
+    @clients.setter
+    def clients(self, value):  # for backwards compatibility
+        self._clients = value
 
     @property
     def provider_configuration(self):
