@@ -335,7 +335,7 @@ class Provider(object):
     def handle_token_request(self, request_body,  # type: str
                              http_headers=None,  # type: Optional[Mapping[str, str]]
                              extra_id_token_claims=None
-                             # type: Optional[Union[Mapping[str, Union[str, List[str]]], Callable[[str, str], Mapping[str, Union[str, List[str]]]]]
+                             # type: Optional[Union[Mapping[str, Union[str, List[str]]], Callable[[str, str], Mapping[str, Union[str, List[str]]]]]]
                              ):
         # type: (...) -> oic.oic.message.AccessTokenResponse
         """
@@ -435,8 +435,11 @@ class Provider(object):
         self._verify_code_exchange_req(token_request, authentication_request)
 
         sub = self.authz_state.get_subject_identifier_for_code(token_request['code'])
-        if not self.stateless:
-            user_id = self.authz_state.get_user_id_for_subject_identifier(sub)
+        user_id = (
+            self.authz_state.get_user_id_for_subject_identifier(sub)
+            if not self.stateless
+            else sub
+        )
 
         response = AccessTokenResponse()
 
@@ -446,14 +449,20 @@ class Provider(object):
         if refresh_token is not None:
             response['refresh_token'] = refresh_token
 
-        extra_id_token_claims = extra_id_token_claims or {}
+        extra_id_token_claims = (
+            extra_id_token_claims(user_id, authentication_request['client_id'])
+            if callable(extra_id_token_claims)
+            else {}
+            if not extra_id_token_claims
+            else extra_id_token_claims
+        )
+        extra_id_token_claims_in_code = (
+            self.authz_state.get_extra_id_token_claims_for_code(token_request['code'])
+            if self.stateless
+            else {}
+        )
+        extra_id_token_claims.update(extra_id_token_claims_in_code)
 
-        if self.stateless:
-            extra_id_token_claims_in_code = self.authz_state.get_extra_id_token_claims_for_code(token_request['code'])
-            extra_id_token_claims.update(extra_id_token_claims_in_code)
-        elif callable(extra_id_token_claims):
-            extra_id_token_claims = extra_id_token_claims(user_id, authentication_request['client_id'])
-        
         requested_claims = self._get_requested_claims_in(authentication_request, 'id_token')
         if self.stateless:
             user_info = self.authz_state.get_user_info_for_code(token_request['code'])
