@@ -449,19 +449,20 @@ class Provider(object):
         if refresh_token is not None:
             response['refresh_token'] = refresh_token
 
-        extra_id_token_claims = (
-            extra_id_token_claims(user_id, authentication_request['client_id'])
-            if callable(extra_id_token_claims)
-            else {}
-            if not extra_id_token_claims
-            else extra_id_token_claims
-        )
-        extra_id_token_claims_in_code = (
-            self.authz_state.get_extra_id_token_claims_for_code(token_request['code'])
-            if self.stateless
-            else {}
-        )
-        extra_id_token_claims.update(extra_id_token_claims_in_code)
+        if callable(extra_id_token_claims):
+            # In stateless mode there is no user_db for the callable to consult, and its
+            # result would be overwritten by the claims stored in the code below.
+            extra_id_token_claims = (
+                {} if self.stateless
+                else extra_id_token_claims(user_id, authentication_request['client_id'])
+            )
+        elif not extra_id_token_claims:
+            extra_id_token_claims = {}
+
+        if self.stateless:
+            extra_id_token_claims.update(
+                self.authz_state.get_extra_id_token_claims_for_code(token_request['code'])
+            )
 
         requested_claims = self._get_requested_claims_in(authentication_request, 'id_token')
         if self.stateless:
